@@ -1,4 +1,3 @@
-from contextlib import contextmanager
 import psycopg2
 
 # PostgreSQL database connection details
@@ -8,7 +7,6 @@ DB_NAME = 'EuFoRIa_trees_db'
 DB_USER = 'vukoz'
 DB_PASSWORD = 'W0Ja3l9WbabOxWatduegk6akPTJg9kZi6JxaKuWIjncX7AK0ct2vYaL9kDExoVjH'
 
-@contextmanager
 def get_db_connection():
     conn = None
     try:
