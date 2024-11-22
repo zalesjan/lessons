@@ -1,7 +1,6 @@
 import streamlit as st
 from modules.methods_manipulation import select_suitable_methods
 from modules.db_operations import get_db_connection, generate_lesson_plan
-from werkzeug.security import generate_password_hash, check_password_hash
 
 
 # Define subject categories
