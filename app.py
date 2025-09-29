@@ -1,139 +1,133 @@
+# app.py
 import streamlit as st
-from modules.methods_manipulation import select_suitable_methods
-from modules.db_operations import get_db_connection, generate_lesson_plan
+from utils.data import methods
 
+st.set_page_config(page_title="Lessons", page_icon="📚", layout="centered")
 
-# Define subject categories
-subject_categories = {
-    "Humanities": [
-        "Art", "History", "Music", "Performing Arts", "Communication", 
-        "Social Studies", "Philosophy", "Language"
-    ],
-    "Natural Sciences": [
-        "Science", "Math", "Health", "Geography"
-    ],
-    "Others": [
-        "Logic"
-    ]
-}
+# --- language toggle in sidebar ---
+if "lang" not in st.session_state:
+    st.session_state.lang = "en"
+lang = st.sidebar.selectbox("Language / Jazyk", ["en", "cs"], index=0 if st.session_state.lang=="en" else 1)
+st.session_state.lang = lang
 
-# All available subjects
-all_subjects = [
-    "Art", "Logic", "History", "Music", "Performing Arts", "Communication",
-    "Social Studies", "Math", "Health", "Geography", "Philosophy", 
-    "Science", "Language"
+t = {
+    "en": {
+        "title": "Composed Lesson Variants",
+        "subtitle": "Each variant centers a different method and includes 1–2 lead-in and 1–2 consolidation steps.",
+        "before": "Before",
+        "center": "Center",
+        "after": "After",
+        "subject": "Subject",
+        "level": "Level",
+        "objective": "Objective",
+        "open_method": "Open method manual",
+    },
+    "cs": {
+        "title": "Varianty složené lekce",
+        "subtitle": "Každá varianta staví na jiné metodě a obsahuje 1–2 úvodní a 1–2 závěrečné aktivity.",
+        "before": "Před",
+        "center": "Střed",
+        "after": "Po",
+        "subject": "Předmět",
+        "level": "Úroveň",
+        "objective": "Cíl",
+        "open_method": "Otevřít metodiku",
+    },
+}[lang]
+
+# --- three lesson variants (center -> method id) ---
+variants = [
+    {
+        "id": "lesson-jigsaw",
+        "title": "Ecosystems & Energy Flow",
+        "objective": "Students build expertise on trophic levels and teach peers.",
+        "subject": "Science",
+        "level": "Grade 8–9",
+        "center_label": "Jigsaw",
+        "center_target_id": "jigsaw",
+        "before": [
+            ("Advance Organizer", "Preview today’s concept map: producers → consumers → decomposers.", 5),
+            ("Think–Pair–Share", "Activate prior knowledge about local food chains.", 5),
+        ],
+        "center": ("Jigsaw", "Expert groups master subtopics, then teach in mixed groups.", 25),
+        "after": [
+            ("Whole-class Synthesis", "Report key takeaways; resolve misconceptions.", 5),
+            ("Exit Ticket", "One energy transfer example + one open question.", 5),
+        ],
+    },
+    {
+        "id": "lesson-bus",
+        "title": "Causes of the Industrial Revolution",
+        "objective": "Generate and refine ideas about social, tech, and economic drivers.",
+        "subject": "History",
+        "level": "Grade 9–10",
+        "center_label": "Bus Stops",
+        "center_target_id": "bus-stops",
+        "before": [
+            ("Quickwrite", "What made the Industrial Revolution possible?", 4),
+            ("Prompt Unpack", "Clarify prompts: resources, inventions, labor, capital, policy.", 3),
+        ],
+        "center": ("Bus Stops", "Rotate stations, add ideas, build on prior notes.", 20),
+        "after": [
+            ("Gallery Debrief", "Identify strongest evidence or surprises.", 6),
+            ("3-2-1", "3 insights, 2 questions, 1 modern connection.", 4),
+        ],
+    },
+    {
+        "id": "lesson-line",
+        "title": "Ethics of AI in the Classroom",
+        "objective": "Articulate positions and engage with counter-arguments.",
+        "subject": "Civics / ICT",
+        "level": "Grade 10–11",
+        "center_label": "Line (Human Continuum)",
+        "center_target_id": "line",
+        "before": [
+            ("Anticipation Guide", "Agree/disagree statements (e.g., “AI makes cheating inevitable”).", 5),
+            ("Evidence Snapshots", "Pairs skim short excerpts on AI benefits/risks.", 5),
+        ],
+        "center": ("Line Method (Human Continuum)", "Stand along agree↔disagree; explain; move with evidence.", 18),
+        "after": [
+            ("Counter-claim Pairs", "Formulate a counter-argument.", 6),
+            ("Reflect & Commit", "Has your position shifted? Why/why not?", 4),
+        ],
+    },
 ]
 
+st.title(t["title"])
+st.caption(t["subtitle"])
 
-# Streamlit App Title
-#st.title("Lesson Plan Generator")
+for v in variants:
+    with st.container(border=True):
+        st.subheader(v["title"])
+        st.write(f"**{t['subject']}:** {v['subject']} · **{t['level']}:** {v['level']} · **{t['objective']}:** {v['objective']}")
 
-# Section: Lesson Plan Generation
-st.header("Lesson Plan Generation")
+        # Before
+        if v["before"]:
+            st.markdown(f"##### {t['before']}")
+            cols = st.columns(len(v["before"]))
+            for col, (name, summary, mins) in zip(cols, v["before"]):
+                with col:
+                    st.write(f"**{name}**  \n{summary}  \n*⏱ {mins} min*")
 
-# Form to input lesson plan filter criteria
-with st.form(key='new_generate_lesson_form'):
-    min_age = st.number_input("Minimum Age", min_value=1, max_value=18, value=3)
-    max_age = st.number_input("Maximum Age", min_value=1, max_value=18, value=8)
+        # Center — include a button that navigates to Methods with a query param
+        st.markdown(f"##### {t['center']} — {v['center_label']}")  # label + center method name
+        name, summary, mins = v["center"]
+        st.write(f"**{name}**  \n{summary}  \n*⏱ {mins} min*")
+        go = st.button(f"▶ {t['open_method']}: {v['center_label']}", key=v["id"])
+        if go:
+            st.query_params["method"] = v["center_target_id"]
+            st.switch_page("pages/1_Methods.py")  # Streamlit 1.22+; if not available, see alt below
 
-    # Option to either select a category or a specific subject
-    selected_category = st.selectbox("Select Category", ["None"] + list(subject_categories.keys()))
-    selected_subject = st.selectbox("Or Select Subject", ["None"] + all_subjects)
-    total_max_duration = st.number_input("Maximum total duration", min_value=1, max_value=1000, value=90)
+        # After
+        if v["after"]:
+            st.markdown(f"##### {t['after']}")
+            cols = st.columns(len(v["after"]))
+            for col, (name, summary, mins) in zip(cols, v["after"]):
+                with col:
+                    st.write(f"**{name}**  \n{summary}  \n*⏱ {mins} min*")
 
-    # New: Define block time allocation (percentage for each block)
-    block_allocations = {}
-    for i in range(1, 6):  # Assuming blocks 1 to 5
-        block_allocations[i] = st.slider(f"Block {i} time allocation (in percentage)", min_value=0, max_value=100, value=0, step=5)
-    
-    new_generate_lesson_button = st.form_submit_button(label="Generate Lesson Plan")
-
-if new_generate_lesson_button:
-# Ensure the total percentage is 100%
-    if sum(block_allocations.values()) != 100:
-        st.error("The total block time allocation must sum to 100%!")
-    else:
-        # Calculate the max duration for each block based on user input
-        block_durations = {block: (block_allocations[block] / 100) * total_max_duration for block in block_allocations}
-
-    
-        # Collect filter values
-        filters = {
-            'category': selected_category if selected_category != "None" else None,
-            'subject': selected_subject if selected_subject != "None" else None,
-            'min_age': min_age,
-            'max_age': max_age,
-            'total_max_duration': total_max_duration,
-            'block_durations': block_durations  # Pass block durations
-        }
-
-    # Call the lesson plan generation function
-    methods = generate_lesson_plan(filters, subject_categories)
-    #st.write(f"Methods retrieved: {methods}")  # Debugging
-
-    if methods:
-        suitable_methods = select_suitable_methods(methods, total_max_duration, block_allocations)
-
-        if suitable_methods:
-            st.subheader("Generated Lesson Plan")
-            for method in suitable_methods:
-                st.write(f"**Method ID**: {method[0]}")
-                st.write(f"**Name**: {method[1]}")
-                st.write(f"**Description**: {method[2]}")
-                st.write(f"**Duration**: {method[3]} minutes")
-                st.write(f"**Age Group**: {method[4]}")
-                st.write(f"**Block**: {method[5]}")
-                st.write(f"**Subject**: {method[6]}")
-                st.write(f"**Topic**: {method[7]}")
-                st.write(f"**Tools**: {method[8]}")
-                st.write(f"**Sources**: {method[9]}")
-                st.write("---")
-        else:
-            st.write("No suitable methods found.")
-    else:
-        st.write("No methods found for the selected filters.")
-
-# Section: Define Lesson
-st.header("Define and Save Lesson Plan")
-
-# Save lesson plan form
-with st.form(key='save_lesson_form'):
-    user_id = st.number_input("User ID", value=1)
-    filters_description = st.text_input("Filters Description")
-    filters_subject = st.selectbox(
-        "Select Subject", 
-        [
-            "Art", "Logic", "History", "Music", "Performing Arts", "Communication", 
-            "Social Studies", "Math", "Health", "Geography", "Philosophy", "Science", "Language"
-        ]
-    )
-    filters_topic = st.text_input("Filters Topic")
-    save_lesson_button = st.form_submit_button(label="Save Lesson Plan")
-
-if save_lesson_button:
-    if user_id and filters_description:
-        try:
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-
-                # Insert lesson and retrieve ID
-                cursor.execute(
-                    "INSERT INTO Lessons (user_id, topic) VALUES (%s, %s) RETURNING lesson_id", 
-                    (user_id, filters_topic)
-                )
-                lesson_id = cursor.fetchone()[0]
-
-                # Save selected lesson methods
-                for order, method in enumerate(suitable_methods):  # Uses suitable methods from generated lesson plan
-                    cursor.execute(
-                        "INSERT INTO LessonMethods (lesson_id, method_id, sequence_order) VALUES (%s, %s, %s)",
-                        (lesson_id, method[0], order)
-                    )
-
-                conn.commit()
-                st.success(f"Lesson Plan saved with ID {lesson_id}")
-
-        except Exception as e:
-            st.error(f"Failed to save lesson plan: {str(e)}")
-    else:
-        st.error("User ID and filters description are required to save the lesson plan.")
+# ---- If st.switch_page is not available in your version:
+# st.markdown(f"[{t['open_method']}: {v['center_label']}](/1_Methods?method={v['center_target_id']})")
+# or:
+# st.experimental_set_query_params(method=v["center_target_id"])
+# st.experimental_rerun()
