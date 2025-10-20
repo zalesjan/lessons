@@ -1,7 +1,8 @@
 # app.py
+import os
 import streamlit as st
 from datetime import date
-
+from supabase import create_client, Client
 from openai import OpenAI
 
 # --------------------------------------------------
@@ -138,11 +139,16 @@ for v in variants:
 # --------------------------------------------------
 # Setup
 # --------------------------------------------------
-from supabase import create_client, Client
 url = st.secrets["supabase"]["url"]
 key = st.secrets["supabase"]["anon_key"]
 supabase: Client = create_client(url, key)
-client = OpenAI()  # Requires OPENAI_API_KEY env var
+# Try Streamlit Cloud secrets first, then fall back to local env
+api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+
+if not api_key:
+    st.error("❌ No OpenAI API key found. Please set it in Streamlit Secrets or as an environment variable.")
+else:
+    client = OpenAI(api_key=api_key)
 MODEL = "gpt-4o-mini"
 
 st.set_page_config(page_title="Lesson Generator", page_icon="🎓", layout="centered")
