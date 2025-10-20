@@ -143,7 +143,7 @@ url = st.secrets["supabase"]["url"]
 key = st.secrets["supabase"]["anon_key"]
 supabase: Client = create_client(url, key)
 # Try Streamlit Cloud secrets first, then fall back to local env
-api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+api_key = st.secrets["open_AI"]["OPENAI_API_KEY"] or os.getenv("OPENAI_API_KEY")
 
 if not api_key:
     st.error("❌ No OpenAI API key found. Please set it in Streamlit Secrets or as an environment variable.")
