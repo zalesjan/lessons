@@ -195,7 +195,7 @@ if not st.session_state.user:
                 auth_res = supabase.auth.sign_in_with_password({"email": email, "password": pw})
                 if auth_res.user:
                     st.session_state.user = auth_res.user
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error("Invalid credentials.")
             except Exception as e:
@@ -234,7 +234,7 @@ else:
 # Manual “Pay” unlock
 if not paid and st.button("💳 Mark as Paid (Manual)"):
     update_profile(user.id, {"paid": True})
-    st.experimental_rerun()
+    st.rerun()
 
 st.markdown("---")
 
