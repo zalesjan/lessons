@@ -1,60 +1,142 @@
 # pages/1_Methods.py
 import streamlit as st
-from utils.data import methods
+import json
+from supabase import create_client
 
-st.set_page_config(page_title="Methods", page_icon="🧩", layout="centered")
+def safe_json_load(x):
+            if not x or x in ("", "null", "None"):
+                return []
+            if isinstance(x, (list, dict)):
+                return x
+            try:
+                return json.loads(x)
+            except Exception:
+                return [str(x)]
+            
+st.set_page_config(page_title="Methods", page_icon="🧩", layout="wide")
 
-# language (from session)
+if "lang" not in st.session_state:
+    st.session_state.lang = "en"
+lang = st.sidebar.selectbox("Language / Jazyk", ["en", "cs"], index=0 if st.session_state.lang=="en" else 1)
+st.session_state.lang = lang
+
+# --- Supabase client ---
+url = st.secrets["supabase"]["url"]
+key = st.secrets["supabase"]["key"]
+supabase = create_client(url, key)
+
+# --- Language ---
 lang = st.session_state.get("lang", "en")
-title = "Didactic methods" if lang == "en" else "Didaktické metody"
-
-# which method to open (query param ?method=...)
-method_qs = st.query_params.get("method", None)
+title = {
+    "en": "Didactic methods",
+    "cs": "Didaktické metody",
+    "fr": "Méthodes didactiques",
+    "es": "Métodos didácticos",
+    "pt": "Métodos didáticos",
+    "de": "Didaktische Methoden",
+    "pl": "Metody dydaktyczne"
+}.get(lang, "Didactic methods")
 
 st.title(title)
 
+# --- Load methods ---
+@st.cache_data(ttl=300)
+def load_methods():
+    return supabase.table("methods").select("*").execute().data or []
+
+methods = load_methods()
+
+method_qs = st.query_params.get("method", None)
+
+# --- Render ---
 for m in methods:
-    # auto-open if query param matches
-    opened = (m.id == method_qs)
+
+    m_id = str(m.get("id"))
+    opened = (m_id == method_qs)
+
+    # Get translated fields with fallback
+    name = m.get(f"name_{lang}") or m.get("name") or "Unnamed method"
+    description = m.get(f"description{lang}") or m.get("description")
+
+    before = safe_json_load(m["before"])
+    after = safe_json_load(m["after"])
+
+    steps = m.get(f"content_md_{lang}") or m.get("content_md")
+    
+    tips = m.get(f"tips_{lang}") or m.get("tips")
 
     with st.container(border=True):
-        # Header row with a manual open/close button that also updates the URL
         cols = st.columns([0.7, 0.3])
         with cols[0]:
-            st.subheader(m.name)
-            if m.summary:
-                st.write(m.summary)
+            st.subheader(name)
+            if description:
+                st.write(description)
         with cols[1]:
-            if st.button(("Hide manual" if opened else "▶ Watch manual"), key=f"btn-{m.id}"):
+            if st.button(("Hide manual" if opened else "▶ Watch manual"), key=f"btn-{m_id}"):
                 if opened:
-                    # close: clear query param
                     st.query_params.clear()
                 else:
-                    # open: set method=<id>
-                    st.query_params["method"] = m.id
+                    st.query_params["method"] = m_id
                 st.rerun()
+        with cols[1]:
+            st.write("Tip - try this method before:")
+            if before:
+                for title, details in before.items():
+                    # details is a list like ["Description", 5]
+                    description = details[0] if len(details) > 0 else ""
+                    duration = details[1] if len(details) > 1 else None
+                    mins = f" — {duration} min" if duration else ""
+                    st.markdown(f"- **{title}**{mins}  \n  {description}")
 
-        # Details
+        with cols[1]:
+            st.write("Tip - try this method after:")
+            if after:
+                for title, details in after.items():
+                    # details is a list like ["Description", 5]
+                    description = details[0] if len(details) > 0 else ""
+                    duration = details[1] if len(details) > 1 else None
+                    mins = f" — {duration} min" if duration else ""
+                    st.markdown(f"- **{title}**{mins}  \n  {description}")
+
         meta = []
-        if m.useFor:   meta.append("**Use for:** " + ", ".join(m.useFor))
-        if m.time:     meta.append("**Time:** " + m.time)
-        if m.materials:meta.append("**Materials:** " + ", ".join(m.materials))
+        if m.get("age_group"):
+            vals = safe_json_load(m["age_group"])
+            if vals:
+                meta.append("**Use for:** " + ", ".join(map(str, vals)))
+
+        if m.get("tags"):
+                    meta.append(str(m["tags"]))
+
+        if m.get("time"):
+            meta.append("**Time:** " + str(m["time"]))
+
+        if m.get("tools"):
+            mats = safe_json_load(m["tools"])
+            if mats:
+                meta.append("**Materials:** " + ", ".join(map(str, mats)))
+
         if meta:
             st.write(" · ".join(meta))
 
+
         # Steps
-        if m.steps:
+        if steps:
+            steps = json.loads(steps) if isinstance(steps, str) else steps
             st.markdown("**Suggested steps**")
-            for s in m.steps:
-                mins = f" — {s.durationMin} min" if s.durationMin else ""
-                st.markdown(f"- **{s.title}**{mins}  \n  {s.description}")
+            for title, details in steps.items():
+                # details is a list like ["Description", 5]
+                description = details[0] if len(details) > 0 else ""
+                duration = details[1] if len(details) > 1 else None
+                mins = f" — {duration} min" if duration else ""
+                st.markdown(f"- **{title}**{mins}  \n  {description}")
 
         # Tips
-        if m.tips:
+        if tips:
+            tips = json.loads(tips) if isinstance(tips, str) else tips
             st.markdown("**Tips**")
-            for tip in m.tips:
+            for tip in tips:
                 st.markdown(f"- {tip}")
 
-        # Video preview (shown when opened)
-        if opened and m.videoUrl:
-            st.video(m.videoUrl)
+        # Video
+        if opened and m.get("videoUrl"):
+            st.video(m["videoUrl"])
