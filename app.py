@@ -1,147 +1,187 @@
-# app.py
-import os
+# pages/1_Methods.py
 import streamlit as st
+import json
+import os
 from datetime import date
 from supabase import create_client, Client
 from openai import OpenAI
 
-# --------------------------------------------------
-# Static teaching methods
-# --------------------------------------------------
-# --- language toggle in sidebar ---
+def safe_json_load(x):
+            if not x or x in ("", "null", "None"):
+                return []
+            if isinstance(x, (list, dict)):
+                return x
+            try:
+                return json.loads(x)
+            except Exception:
+                return [str(x)]
+            
+st.set_page_config(page_title="Methods", page_icon="🧩", layout="wide")
+
 if "lang" not in st.session_state:
     st.session_state.lang = "en"
 lang = st.sidebar.selectbox("Language / Jazyk", ["en", "cs"], index=0 if st.session_state.lang=="en" else 1)
 st.session_state.lang = lang
 
+# --- Supabase client ---
+url = st.secrets["supabase"]["url"]
+key = st.secrets["supabase"]["key"]
+supabase = create_client(url, key)
+
+# --- Language ---
+lang = st.session_state.get("lang", "en")
+title = {
+    "en": "Didactic methods",
+    "cs": "Didaktické metody",
+    "fr": "Méthodes didactiques",
+    "es": "Métodos didácticos",
+    "pt": "Métodos didáticos",
+    "de": "Didaktische Methoden",
+    "pl": "Metody dydaktyczne"
+}.get(lang, "Didactic methods")
+
 t = {
     "en": {
         "title": "Composed Lesson Variants",
         "subtitle": "Each variant centers a different method and includes 1–2 lead-in and 1–2 consolidation steps.",
-        "before": "Before",
-        "center": "Center",
-        "after": "After",
+        "before": "**People tried this method before:**",
+        "main_method": "Suggested steps",
+        "after": "Try to go for this after",
         "subject": "Subject",
-        "level": "Level",
-        "objective": "Objective",
-        "open_method": "Open method manual",
+        "level": "Use for",
+        "materials": "Be ready with",
+        "open_method": "Open video",
     },
     "cs": {
-        "title": "Varianty složené lekce",
-        "subtitle": "Každá varianta staví na jiné metodě a obsahuje 1–2 úvodní a 1–2 závěrečné aktivity.",
-        "before": "Před",
-        "center": "Střed",
-        "after": "Po",
+        "title": "Kombinuj moderní didaktické metody a vytvoř super hodinu",
+        "subtitle": "Každá varianta staví na jiné  hlavní metodě, a taky obsahuje 1–2 úvodní a 1–2 závěrečné aktivity.",
+        "before": "Toto můžeš zařadit před:",
+        "main_method": "Provedení metody / Doporučený postup",
+        "after": "Toto můžeš zařadit po:",
         "subject": "Předmět",
-        "level": "Úroveň",
-        "objective": "Cíl",
-        "open_method": "Otevřít metodiku",
+        "level": "Určeno pro",
+        "materials": "Připrav si",
+        "open_method": "Otevřít video",
     },
 }[lang]
 
-# --- three lesson variants (center -> method id) ---
-variants = [
-    {
-        "id": "lesson-jigsaw",
-        "title": "Ecosystems & Energy Flow",
-        "objective": "Students build expertise on trophic levels and teach peers.",
-        "subject": "Science",
-        "level": "Grade 8–9",
-        "center_label": "Jigsaw",
-        "center_target_id": "jigsaw",
-        "before": [
-            ("Advance Organizer", "Preview today’s concept map: producers → consumers → decomposers.", 5),
-            ("Think–Pair–Share", "Activate prior knowledge about local food chains.", 5),
-        ],
-        "center": ("Jigsaw", "Expert groups master subtopics, then teach in mixed groups.", 25),
-        "after": [
-            ("Whole-class Synthesis", "Report key takeaways; resolve misconceptions.", 5),
-            ("Exit Ticket", "One energy transfer example + one open question.", 5),
-        ],
-    },
-    {
-        "id": "lesson-bus",
-        "title": "Causes of the Industrial Revolution",
-        "objective": "Generate and refine ideas about social, tech, and economic drivers.",
-        "subject": "History",
-        "level": "Grade 9–10",
-        "center_label": "Bus Stops",
-        "center_target_id": "bus-stops",
-        "before": [
-            ("Quickwrite", "What made the Industrial Revolution possible?", 4),
-            ("Prompt Unpack", "Clarify prompts: resources, inventions, labor, capital, policy.", 3),
-        ],
-        "center": ("Bus Stops", "Rotate stations, add ideas, build on prior notes.", 20),
-        "after": [
-            ("Gallery Debrief", "Identify strongest evidence or surprises.", 6),
-            ("3-2-1", "3 insights, 2 questions, 1 modern connection.", 4),
-        ],
-    },
-    {
-        "id": "lesson-line",
-        "title": "Ethics of AI in the Classroom",
-        "objective": "Articulate positions and engage with counter-arguments.",
-        "subject": "Civics / ICT",
-        "level": "Grade 10–11",
-        "center_label": "Line (Human Continuum)",
-        "center_target_id": "line",
-        "before": [
-            ("Anticipation Guide", "Agree/disagree statements (e.g., “AI makes cheating inevitable”).", 5),
-            ("Evidence Snapshots", "Pairs skim short excerpts on AI benefits/risks.", 5),
-        ],
-        "center": ("Line Method (Human Continuum)", "Stand along agree↔disagree; explain; move with evidence.", 18),
-        "after": [
-            ("Counter-claim Pairs", "Formulate a counter-argument.", 6),
-            ("Reflect & Commit", "Has your position shifted? Why/why not?", 4),
-        ],
-    },
-]
 
+st.title(title)
 st.title(t["title"])
 st.caption(t["subtitle"])
+# --- Load methods ---
+@st.cache_data(ttl=300)
+def load_methods():
+    return supabase.table("methods").select("*").execute().data or []
 
-for v in variants:
+methods = load_methods()
+
+def method_lang(id_value):
+    """Extracts the language code after the second hyphen."""
+    if not id_value or '-' not in id_value:
+        return 'en'
+    parts = id_value.split('-')
+    return parts[-1] if len(parts[-1]) == 2 else 'en'
+
+filtered_methods = [m for m in methods if method_lang(m.get("id", "")) == lang]
+
+method_qs = st.query_params.get("method", None)
+
+# --- Render ---
+for m in filtered_methods:
+
+    m_id = str(m.get("id"))
+    opened = (m_id == method_qs)
+
+    # Get translated fields with fallback
+    name = m.get(f"name_{lang}") or m.get("name") or "Unnamed method"
+    description = m.get(f"description{lang}") or m.get("description")
+
+    before = safe_json_load(m["before"])
+    after = safe_json_load(m["after"])
+    content = safe_json_load(m["content_md"])
+    
+    tips = m.get(f"tips_{lang}") or m.get("tips")
+
     with st.container(border=True):
-        st.subheader(v["title"])
-        st.write(f"**{t['subject']}:** {v['subject']} · **{t['level']}:** {v['level']} · **{t['objective']}:** {v['objective']}")
+        cols = st.columns([0.7, 0.3])
+        with cols[0]:
+            st.subheader(name)
+            if description:
+                st.write(description)
+        with cols[1]:
+            if st.button("Hide manual" if opened else f"▶ {t['open_method']}: {name}", key=f"btn-{m_id}"):
+                #("Hide manual" if opened else "▶ Watch manual"), key=f"btn-{m_id}"):
+                if opened:
+                    st.query_params.clear()
+                else:
+                    st.query_params["method"] = m_id
+                st.rerun()
 
-        # Before
-        if v["before"]:
-            st.markdown(f"##### {t['before']}")
-            cols = st.columns(len(v["before"]))
-            for col, (name, summary, mins) in zip(cols, v["before"]):
-                with col:
-                    st.write(f"**{name}**  \n{summary}  \n*⏱ {mins} min*")
+        with cols[1]:
+            if before:
+                st.markdown(f"##### {t['before']}")
+                for step in sorted(before, key=lambda x: x.get("order", 0)):
+                    title = step.get("title", "")
+                    activity = step.get("activity", "")
+                    minutes = step.get("minutes")
+                    mins = f" — {minutes} min" if minutes else ""
+                    st.markdown(f"- **{title}**{mins}  \n  {activity}")
 
-        # Center — include a button that navigates to Methods with a query param
-        st.markdown(f"##### {t['center']} — {v['center_label']}")  # label + center method name
-        name, summary, mins = v["center"]
-        st.write(f"**{name}**  \n{summary}  \n*⏱ {mins} min*")
-        go = st.button(f"▶ {t['open_method']}: {v['center_label']}", key=v["id"])
-        if go:
-            st.query_params["method"] = v["center_target_id"]
-            st.switch_page("pages/1_Methods.py")  # Streamlit 1.22+; if not available, see alt below
+        with cols[1]:
+            if after:
+                st.markdown(f"##### {t['after']}")
+                for step in sorted(after, key=lambda x: x.get("order", 0)):
+                    title = step.get("title", "")
+                    activity = step.get("activity", "")
+                    minutes = step.get("minutes")
+                    mins = f" — {minutes} min" if minutes else ""
+                    st.markdown(f"- **{title}**{mins}  \n  {activity}")
 
-        # After
-        if v["after"]:
-            st.markdown(f"##### {t['after']}")
-            cols = st.columns(len(v["after"]))
-            for col, (name, summary, mins) in zip(cols, v["after"]):
-                with col:
-                    st.write(f"**{name}**  \n{summary}  \n*⏱ {mins} min*")
+        meta = []
+        if m.get("age_group"):
+            vals = safe_json_load(m["age_group"])
+            if vals:
+                meta.append(f"**{t['level']}:** " + ", ".join(map(str, vals)))
 
- #---- If st.switch_page is not available in your version:
- #st.markdown(f"[{t['open_method']}: {v['center_label']}](/1_Methods?method={v['center_target_id']})")
- #or:
- #st.experimental_set_query_params(method=v["center_target_id"])
- #st.experimental_rerun()
+        if m.get("tags"):
+                    meta.append(str(m["tags"]))
 
-# --------------------------------------------------
-# Setup
-# --------------------------------------------------
-url = st.secrets["supabase"]["url"]
-key = st.secrets["supabase"]["anon_key"]
-supabase: Client = create_client(url, key)
+        if m.get("time"):
+            meta.append("**Time:** " + str(m["time"]))
+
+        if m.get("tools"):
+            mats = safe_json_load(m["tools"])
+            if mats:
+                meta.append(f"**{t['materials']}:** " + ", ".join(map(str, mats)))
+
+        if meta:
+            st.write(" · ".join(meta))
+
+
+        # Steps
+        if content:
+            st.markdown(f"##### {t['main_method']}")
+            for step in sorted(content, key=lambda x: x.get("order", 0)):
+                title = step.get("title", "")
+                activity = step.get("activity", "")
+                minutes = step.get("minutes")
+                mins = f" — {minutes} min" if minutes else ""
+                st.markdown(f"- **{title}**{mins}  \n  {activity}")
+
+        # Tips
+        if tips:
+            tips = json.loads(tips) if isinstance(tips, str) else tips
+            st.markdown("**Tips**")
+            for tip in tips:
+                st.markdown(f"- {tip}")
+
+        # Video
+        if opened and m.get("videoUrl"):
+            st.video(m["videoUrl"])
+
+
+
 # Try Streamlit Cloud secrets first, then fall back to local env
 api_key = st.secrets["open_AI"]["OPENAI_API_KEY"] or os.getenv("OPENAI_API_KEY")
 
@@ -150,8 +190,6 @@ if not api_key:
 else:
     client = OpenAI(api_key=api_key)
 MODEL = "gpt-4o-mini"
-
-st.set_page_config(page_title="Lesson Generator", page_icon="🎓", layout="centered")
 
 # --------------------------------------------------
 # Helper functions
@@ -175,7 +213,7 @@ if "user" not in st.session_state:
 
 if not st.session_state.user:
     st.title("🎓 AI Lesson Generator")
-    mode = st.radio("Choose mode:", ["Login", "Sign up"], horizontal=True)
+    mode = st.radio("Select to:", ["Login", "Sign up"], horizontal=True)
     email = st.text_input("Email address")
     pw = st.text_input("Password", type="password")
 
@@ -232,11 +270,11 @@ else:
         can_generate = True
 
 # Manual “Pay” unlock
-if not paid and st.button("💳 Mark as Paid (Manual)"):
-    update_profile(user.id, {"paid": True})
-    st.rerun()
-
-st.markdown("---")
+#if not paid and st.button("💳 Mark as Paid (Manual)"):
+#    update_profile(user.id, {"paid": True})
+#    st.rerun()
+#
+#st.markdown("---")
 
 
 # --------------------------------------------------
