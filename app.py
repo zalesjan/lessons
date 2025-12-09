@@ -5,70 +5,44 @@ import os
 from datetime import date
 from supabase import create_client, Client
 from openai import OpenAI
+from modules.languages import translations
 
-def safe_json_load(x):
-            if not x or x in ("", "null", "None"):
-                return []
-            if isinstance(x, (list, dict)):
-                return x
-            try:
-                return json.loads(x)
-            except Exception:
-                return [str(x)]
-            
-st.set_page_config(page_title="Methods", page_icon="🧩", layout="wide")
+st.set_page_config(page_title="Didact-io", page_icon="🧩", layout="wide")
 
+# -------------------------------------------------------------------
+# LANGUAGE SELECTION
+# -------------------------------------------------------------------
 if "lang" not in st.session_state:
     st.session_state.lang = "en"
-lang = st.sidebar.selectbox("Language / Jazyk", ["en", "cs"], index=0 if st.session_state.lang=="en" else 1)
+
+#lang = st.sidebar.selectbox("Language / Jazyk", ["en", "cs", "fr", "es"], index=0 if st.session_state.lang=="en" else 1)
+lang = st.sidebar._selectbox(
+    "🌐 Language / Jazyk / Langue / Idioma / Sprache",
+    ["en", "cs", "fr", "es", "de"],
+    index=["en", "cs", "fr", "es", "de"].index(st.session_state.lang))
+
 st.session_state.lang = lang
+t = translations.get(lang, translations["en"])
+
+
+def tr(key):
+    return translations[st.session_state.lang].get(key, f"⚠️ Missing translation: {key}")
+
+
+# -------------------------------------------------------------------
+# MAIN CODE -- Methods
+# -------------------------------------------------------------------
+
+st.markdown(tr("about_short"))
+st.title(tr("title"))
+st.caption(tr("subtitle"))
+
 
 # --- Supabase client ---
 url = st.secrets["supabase"]["url"]
 key = st.secrets["supabase"]["key"]
 supabase = create_client(url, key)
 
-# --- Language ---
-lang = st.session_state.get("lang", "en")
-title = {
-    "en": "Didactic methods",
-    "cs": "Didaktické metody",
-    "fr": "Méthodes didactiques",
-    "es": "Métodos didácticos",
-    "pt": "Métodos didáticos",
-    "de": "Didaktische Methoden",
-    "pl": "Metody dydaktyczne"
-}.get(lang, "Didactic methods")
-
-t = {
-    "en": {
-        "title": "Composed Lesson Variants",
-        "subtitle": "Each variant centers a different method and includes 1–2 lead-in and 1–2 consolidation steps.",
-        "before": "**People tried this method before:**",
-        "main_method": "Suggested steps",
-        "after": "Try to go for this after",
-        "subject": "Subject",
-        "level": "Use for",
-        "materials": "Be ready with",
-        "open_method": "Open video",
-    },
-    "cs": {
-        "title": "Kombinuj moderní didaktické metody a vytvoř super hodinu",
-        "subtitle": "Každá varianta staví na jiné  hlavní metodě, a taky obsahuje 1–2 úvodní a 1–2 závěrečné aktivity.",
-        "before": "Toto můžeš zařadit před:",
-        "main_method": "Provedení metody / Doporučený postup",
-        "after": "Toto můžeš zařadit po:",
-        "subject": "Předmět",
-        "level": "Určeno pro",
-        "materials": "Připrav si",
-        "open_method": "Otevřít video",
-    },
-}[lang]
-
-
-st.title(title)
-st.title(t["title"])
-st.caption(t["subtitle"])
 # --- Load methods ---
 @st.cache_data(ttl=300)
 def load_methods():
@@ -83,18 +57,46 @@ def method_lang(id_value):
     parts = id_value.split('-')
     return parts[-1] if len(parts[-1]) == 2 else 'en'
 
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+if not st.session_state.user:
+    # Not logged in
+    number_of_methods_to_show = 7
+#elif paid:
+#    # Logged in + subscribed
+#    number_of_methods_to_show = 1000  # effectively unlimited
+else:
+    # Logged in but unsubscribed
+    number_of_methods_to_show = 10
+
+# --- Filter methods by selected language  ---
 filtered_methods = [m for m in methods if method_lang(m.get("id", "")) == lang]
+filtered_methods = filtered_methods[:number_of_methods_to_show]
+method_names = [m["name"] for m in filtered_methods if "id" in m]
 
 method_qs = st.query_params.get("method", None)
 
+def safe_json_load(x):
+            if not x or x in ("", "null", "None"):
+                return []
+            if isinstance(x, (list, dict)):
+                return x
+            try:
+                return json.loads(x)
+            except Exception:
+                return [str(x)]
+            
+# --------------------------------------------------            
 # --- Render ---
+# --------------------------------------------------
 for m in filtered_methods:
 
     m_id = str(m.get("id"))
     opened = (m_id == method_qs)
 
     # Get translated fields with fallback
-    name = m.get(f"name_{lang}") or m.get("name") or "Unnamed method"
+    name = m.get(f"name_{lang}") or m.get("name") or tr("unnamed_method")
     description = m.get(f"description{lang}") or m.get("description")
 
     before = safe_json_load(m["before"])
@@ -148,7 +150,7 @@ for m in filtered_methods:
                     meta.append(str(m["tags"]))
 
         if m.get("time"):
-            meta.append("**Time:** " + str(m["time"]))
+            meta.append(f"**{tr('time')}:** {m['time']}")
 
         if m.get("tools"):
             mats = safe_json_load(m["tools"])
@@ -157,7 +159,6 @@ for m in filtered_methods:
 
         if meta:
             st.write(" · ".join(meta))
-
 
         # Steps
         if content:
@@ -172,7 +173,8 @@ for m in filtered_methods:
         # Tips
         if tips:
             tips = json.loads(tips) if isinstance(tips, str) else tips
-            st.markdown("**Tips**")
+            st.markdown(f"**{tr('tips')}**")
+
             for tip in tips:
                 st.markdown(f"- {tip}")
 
@@ -180,13 +182,11 @@ for m in filtered_methods:
         if opened and m.get("videoUrl"):
             st.video(m["videoUrl"])
 
-
-
 # Try Streamlit Cloud secrets first, then fall back to local env
 api_key = st.secrets["open_AI"]["OPENAI_API_KEY"] or os.getenv("OPENAI_API_KEY")
 
 if not api_key:
-    st.error("❌ No OpenAI API key found. Please set it in Streamlit Secrets or as an environment variable.")
+    st.error(f"❌ {tr('no_api_key')}")
 else:
     client = OpenAI(api_key=api_key)
 MODEL = "gpt-4o-mini"
@@ -194,6 +194,7 @@ MODEL = "gpt-4o-mini"
 # --------------------------------------------------
 # Helper functions
 # --------------------------------------------------
+
 def get_profile(user_id):
     res = supabase.table("profiles").select("*").eq("id", user_id).execute()
     if res.data:
@@ -208,23 +209,23 @@ def update_profile(user_id, data: dict):
 # --------------------------------------------------
 # Authentication UI
 # --------------------------------------------------
-if "user" not in st.session_state:
-    st.session_state.user = None
 
 if not st.session_state.user:
-    st.title("🎓 AI Lesson Generator")
-    mode = st.radio("Select to:", ["Login", "Sign up"], horizontal=True)
-    email = st.text_input("Email address")
-    pw = st.text_input("Password", type="password")
+    st.title(f"🎓 {tr('adapt_with_ai_login_title')}")
+    st.info(tr("promotion_mode"))
+    mode = st.radio(tr("select_to"), [tr("login"), tr("signup")], horizontal=True)
+    email = st.text_input(tr("email"))
+    pw = st.text_input(tr("password"), type="password")
 
     if mode == "Sign up":
-        if st.button("Create Account"):
+        if st.button(tr("create_account")):
             try:
                 auth_res = supabase.auth.sign_up({"email": email, "password": pw})
                 if auth_res.user:
-                    st.success("✅ Check your email to confirm registration.")
+                    st.success("✅ " + tr("check_email_for_confirmation"))
                 else:
-                    st.error("Could not sign up.")
+                    st.error(tr("could_not_sign_up"))
+
             except Exception as e:
                 st.error(str(e))
     else:  # Login
@@ -235,7 +236,8 @@ if not st.session_state.user:
                     st.session_state.user = auth_res.user
                     st.rerun()
                 else:
-                    st.error("Invalid credentials.")
+                    st.error(tr("invalid_credentials"))
+
             except Exception as e:
                 st.error(str(e))
     st.stop()
@@ -245,11 +247,14 @@ if not st.session_state.user:
 # --------------------------------------------------
 user = st.session_state.user
 profile = get_profile(user.id)
-st.success(f"Welcome {user.email}!")
+st.success(f"{tr('welcome')} {user.email}!")
 
-st.sidebar.button("Logout", on_click=lambda: st.session_state.pop("user"))
+st.sidebar.button(tr("logout"), on_click=lambda: st.session_state.pop("user"))
 
-paid = profile.get("paid", False)
+
+paid = profile.get("paid_now", False)
+if paid:
+    number_of_methods_to_show = 1000
 used = profile.get("free_generations_used", 0)
 last = profile.get("last_generation_date")
 
@@ -257,46 +262,108 @@ today = str(date.today())
 can_generate = False
 
 if paid:
-    st.info("💎 Premium access: unlimited generations.")
+    remaining = 7 - used
+    st.info(f"💎 {tr('premium_generations_notification')}: {remaining}")
     can_generate = True
 else:
     remaining = 7 - used
-    st.warning(f"🆓 Free tier: {remaining} generations left (1 per day).")
+    st.warning(f"🆓 {tr('free_tier_generations_notification')}: {remaining}")
+
     if used >= 7:
-        st.error("No more free generations available.")
-    elif last == today:
-        st.error("Already generated today.")
+        st.error(tr("no_more_free_generations"))
+
+    elif last >= today:
+        st.error(tr("generate_last_day"))
+
     else:
         can_generate = True
 
-# Manual “Pay” unlock
+#Manual “Pay” unlock
 #if not paid and st.button("💳 Mark as Paid (Manual)"):
-#    update_profile(user.id, {"paid": True})
+#    update_profile(user.id, {"paid_now": True})
 #    st.rerun()
-#
-#st.markdown("---")
 
+st.markdown("---")
 
 # --------------------------------------------------
 # AI generation
 # --------------------------------------------------
-st.subheader("✨ Generate AI-Adapted Lesson")
-topic = st.text_input("Enter your lesson topic:")
+st.subheader(f"✨ {tr('generate_AI_subheader')}:")
+
+topic = st.text_input(f"{tr('enter_topic')}:")
+
+method_options = {m["name"]: m["id"] for m in filtered_methods}
+
+selected_names = st.multiselect(
+    f"{tr('Choose_methods_for_AI')}:",
+    list(method_options.keys()),
+)
+
+# Disable new selections when 2 are picked
+if len(selected_names) >= 2:
+    st.info("✅ " + tr("selected_max_two"))
+    selected_names = selected_names[:2]
+
+selected_methods = [method_options[name] for name in selected_names]
+
+methods_steps = []
+
+for method_id in selected_methods:
+    # Find the method dict that matches the selected ID
+    method_data = next((m for m in filtered_methods if m["id"] == method_id), None)
+
+    if not method_data:
+        continue
+
+    # Load the content_md JSON (list of steps)
+    content = safe_json_load(method_data.get("content_md"))
+
+    # Convert the list of step dicts to readable strings
+    if isinstance(content, list):
+        content_sorted = sorted(
+            content, key=lambda s: s.get("order", 0)
+        )
+        steps_text = "\n".join(
+            f"{s.get('order', i+1)}. {s.get('title', '')}: {s.get('activity', '')}"
+            for i, s in enumerate(content_sorted)
+            if isinstance(s, dict)
+        )
+    else:
+        steps_text = str(content)
+
+    # Append a formatted version for later use in the prompt
+    methods_steps.append(f"{method_data.get('name', method_names)} — {steps_text}")
+
+# Optional: preview in Streamlit
+st.markdown(f"### 🧩 {tr('selected_methods')}")
+for ms in selected_methods:
+    st.markdown(f"- {ms}")
+
+# For debugging
+st.write(methods_steps)
 
 if st.button("Generate Lesson"):
     if not topic:
-        st.warning("Enter a topic first.")
+        if not topic:
+            st.warning(tr("enter_topic_first"))
     elif not can_generate:
-        st.error("You can’t generate right now.")
+        st.error(tr("cannot_generate_now"))
+
     else:
-        with st.spinner("Generating lesson..."):
+        with st.spinner(tr("generating_lesson")):
             prompt = f"""
-            You are an expert instructional designer.
-            Using the Jigsaw, Bus Stops, and Line methods,
-            create concise lesson outlines for the topic "{topic}".
-            Each method: title, objective, 1–2 before activities,
-            1 central activity, and 1–2 after activities.
-            Keep total under 250 words.
+            You are an expert instructional designer. 
+            Adapt the following teaching methods to re-create lesson outlines tailored for the topic "{topic}".
+            
+            Methods and their ordered steps:
+            {chr(10).join(methods_steps)}
+                        
+            For each method, provide:
+            - A concise adapted title
+            - One clear learning objective
+            - Ordered step-by-step instructions
+            - One before-activity and one after-activity
+            Keep total under 280 words. Use {lang} language, unless the topic "{topic}" in another language (then use that language).
             """
             try:
                 resp = client.chat.completions.create(
@@ -313,4 +380,5 @@ if st.button("Generate Lesson"):
                         "last_generation_date": today
                     })
             except Exception as e:
-                st.error(f"API error: {e}")
+                st.error(f"{tr('api_error')}: {e}")
+

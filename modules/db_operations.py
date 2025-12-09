@@ -1,4 +1,6 @@
 import psycopg2
+from datetime import date
+
 
 # PostgreSQL database connection details
 DB_HOST = '147.251.253.245'
@@ -66,3 +68,20 @@ def generate_lesson_plan(filters, subject_categories):
     except Exception as e:
         print(f"Error fetching methods: {str(e)}")
         return []
+
+def reset_quotas_if_needed(profile):
+    today = date.today()
+
+    if profile.last_quota_reset_daily != today:
+        profile.lessons_used_daily = 0
+        profile.last_quota_reset_daily = today
+
+    if profile.last_quota_reset_weekly != today.isocalendar()[1]:
+        profile.lessons_used_weekly = 0
+        profile.last_quota_reset_weekly = today.isocalendar()[1]
+
+    if profile.last_quota_reset_monthly != today.month:
+        profile.lessons_used_monthly = 0
+        profile.last_quota_reset_monthly = today.month
+
+    save_profile(profile)
