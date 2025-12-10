@@ -1,30 +1,5 @@
-import psycopg2
 from datetime import date
-
-
-# PostgreSQL database connection details
-DB_HOST = '147.251.253.245'
-DB_PORT = '5432'
-DB_NAME = 'EuFoRIa_trees_db'
-DB_USER = 'vukoz'
-DB_PASSWORD = 'W0Ja3l9WbabOxWatduegk6akPTJg9kZi6JxaKuWIjncX7AK0ct2vYaL9kDExoVjH'
-
-def get_db_connection():
-    conn = None
-    try:
-        conn = psycopg2.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            dbname=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD
-        )
-        yield conn
-    except Exception as e:
-        print(f"Database connection error: {str(e)}")
-    finally:
-        if conn:
-            conn.close()
+import json
 
 def generate_lesson_plan(filters, subject_categories):
     subject = filters.get('subject')
@@ -85,3 +60,58 @@ def reset_quotas_if_needed(profile):
         profile.last_quota_reset_monthly = today.month
 
     save_profile(profile)
+
+def can_generate_lesson(profile, plan):
+    #profile = get_profile(user.id)
+    #plan = profile.get("plan", "free")
+
+    reset_quotas_if_needed(profile)
+
+    if profile.lessons_used_daily >= plan.lesson_daily:
+        return False, "Daily quota exceeded"
+    if profile.lessons_used_weekly >= plan.lesson_weekly:
+        return False, "Weekly quota exceeded"
+    if profile.lessons_used_monthly >= plan.lesson_monthly:
+        return False, "Monthly quota exceeded"
+    if plan.lesson_total and profile.lessons_used_total >= plan.lesson_total:
+        return False, "Total quota exceeded"
+
+    return True, ""
+
+#
+#def how_many_methods(profile, plan, ):
+#    if profile == None:
+#        number_of_methods_to_show = plan.get("weekly_method_quota")
+#    elif profile.get("plan") == "free":
+#        number_of_methods_to_show = free_plan_number_of_methods_to_show
+#    return number_of_methods_to_show
+#
+def record_generation(profile):
+    profile.lessons_used_daily += 1
+    profile.lessons_used_weekly += 1
+    profile.lessons_used_monthly += 1
+    profile.lessons_used_total += 1
+    profile.total_generated_lessons += 1
+    profile.last_generation_date = date.today()
+    save_profile(profile)
+
+def method_lang(id_value):
+    """Extracts the language code after the second hyphen."""
+    if not id_value or '-' not in id_value:
+        return 'en'
+    parts = id_value.split('-')
+    return parts[-1] if len(parts[-1]) == 2 else 'en'
+
+def safe_json_load(x):
+            if not x or x in ("", "null", "None"):
+                return []
+            if isinstance(x, (list, dict)):
+                return x
+            try:
+                return json.loads(x)
+            except Exception:
+                return [str(x)]
+#            
+#UPDATE profiles
+#SET plan = 'free'
+#WHERE subscription_expiry < CURRENT_DATE;
