@@ -1,48 +1,48 @@
 from datetime import date
 import json
 
-def generate_lesson_plan(filters, subject_categories):
-    subject = filters.get('subject')
-    category = filters.get('category')
-    min_age = filters.get('min_age')
-    max_age = filters.get('max_age')
-    max_duration = filters.get('max_duration')
-
-    # Build subject list based on category if no subject is directly selected
-    if category and not subject:
-        subjects = subject_categories.get(category, [])
-    else:
-        subjects = [subject] if subject else []
-
-    # Build the query with dynamic filters
-    query = """
-    SELECT method_id, method_name, description, duration, age_group, block, subject, topic, tools, sources 
-    FROM test_db.DidacticMethods 
-    WHERE 1=1"""
-    params = []
-
-    if subjects:
-        query += " AND subject IN %s"
-        params.append(tuple(subjects)) 
-    
-    if min_age:
-        query += " AND age_group >= %s"
-        params.append(min_age)
-    
-    if max_age:
-        query += " AND age_group <= %s"
-        params.append(max_age)
-
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(query, params)
-            methods = cursor.fetchall()
-
-        return methods
-    except Exception as e:
-        print(f"Error fetching methods: {str(e)}")
-        return []
+#def generate_lesson_plan(filters, subject_categories):
+#    subject = filters.get('subject')
+#    category = filters.get('category')
+#    min_age = filters.get('min_age')
+#    max_age = filters.get('max_age')
+#    max_duration = filters.get('max_duration')
+#
+## Build subject list based on category if no subject is directly selected
+#if category and not subject:
+#    subjects = subject_categories.get(category, [])
+#else:
+#    subjects = [subject] if subject else []
+#
+#    # Build the query with dynamic filters
+#    query = """
+#    SELECT method_id, method_name, description, duration, age_group, block, subject, topic, tools, sources 
+#    FROM test_db.DidacticMethods 
+#    WHERE 1=1"""
+#    params = []
+#
+#    if subjects:
+#        query += " AND subject IN %s"
+#        params.append(tuple(subjects)) 
+#    
+#    if min_age:
+#        query += " AND age_group >= %s"
+#        params.append(min_age)
+#    
+#    if max_age:
+#        query += " AND age_group <= %s"
+#        params.append(max_age)
+#
+#    try:
+#        with get_db_connection() as conn:
+#            cursor = conn.cursor()
+#            cursor.execute(query, params)
+#            methods = cursor.fetchall()
+#
+#        return methods
+#    except Exception as e:
+#        print(f"Error fetching methods: {str(e)}")
+#        return []
 
 def reset_quotas_if_needed(profile):
     today = date.today()
