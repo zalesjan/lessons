@@ -6,6 +6,9 @@ from datetime import date
 from supabase import create_client, Client
 from openai import OpenAI
 from modules.languages import translations
+from modules.db_operations import (
+    reset_quotas_if_needed, can_generate_lesson, method_lang, safe_json_load)
+
 
 st.set_page_config(page_title="Didact-io", page_icon="🧩", layout="wide")
 
@@ -15,19 +18,19 @@ st.set_page_config(page_title="Didact-io", page_icon="🧩", layout="wide")
 if "lang" not in st.session_state:
     st.session_state.lang = "en"
 
-#lang = st.sidebar.selectbox("Language / Jazyk", ["en", "cs", "fr", "es"], index=0 if st.session_state.lang=="en" else 1)
-lang = st.sidebar._selectbox(
+
+st.sidebar.selectbox(
     "🌐 Language / Jazyk / Langue / Idioma / Sprache",
     ["en", "cs", "fr", "es", "de"],
-    index=["en", "cs", "fr", "es", "de"].index(st.session_state.lang))
+    key="lang"
+)
 
-st.session_state.lang = lang
+lang = st.session_state.lang
+
 t = translations.get(lang, translations["en"])
-
 
 def tr(key):
     return translations[st.session_state.lang].get(key, f"⚠️ Missing translation: {key}")
-
 
 # -------------------------------------------------------------------
 # MAIN CODE -- Methods
@@ -37,38 +40,31 @@ st.markdown(tr("about_short"))
 st.title(tr("title"))
 st.caption(tr("subtitle"))
 
-
 # --- Supabase client ---
 url = st.secrets["supabase"]["url"]
 key = st.secrets["supabase"]["key"]
 supabase = create_client(url, key)
 
+profile = {}
+plan= "free"
+
 # --- Load methods ---
 @st.cache_data(ttl=300)
 def load_methods():
     return supabase.table("methods").select("*").execute().data or []
-
 methods = load_methods()
-
-def method_lang(id_value):
-    """Extracts the language code after the second hyphen."""
-    if not id_value or '-' not in id_value:
-        return 'en'
-    parts = id_value.split('-')
-    return parts[-1] if len(parts[-1]) == 2 else 'en'
 
 if "user" not in st.session_state:
     st.session_state.user = None
 
-if not st.session_state.user:
-    # Not logged in
-    number_of_methods_to_show = 7
-#elif paid:
-#    # Logged in + subscribed
-#    number_of_methods_to_show = 1000  # effectively unlimited
-else:
-    # Logged in but unsubscribed
-    number_of_methods_to_show = 10
+def get_quotas(plan):
+    res = supabase.table("plans").select("*").eq("name", plan).execute()
+    if res.data:
+        return res.data[0]
+
+quotas = get_quotas(plan)   
+number_of_methods_to_show = quotas.get("weekly_method_quota")
+
 
 # --- Filter methods by selected language  ---
 filtered_methods = [m for m in methods if method_lang(m.get("id", "")) == lang]
@@ -77,16 +73,6 @@ method_names = [m["name"] for m in filtered_methods if "id" in m]
 
 method_qs = st.query_params.get("method", None)
 
-def safe_json_load(x):
-            if not x or x in ("", "null", "None"):
-                return []
-            if isinstance(x, (list, dict)):
-                return x
-            try:
-                return json.loads(x)
-            except Exception:
-                return [str(x)]
-            
 # --------------------------------------------------            
 # --- Render ---
 # --------------------------------------------------
@@ -112,7 +98,7 @@ for m in filtered_methods:
             if description:
                 st.write(description)
         with cols[1]:
-            if st.button("Hide manual" if opened else f"▶ {t['open_method']}: {name}", key=f"btn-{m_id}"):
+            if st.button(tr("Hide manual") if opened else f"▶ {t['open_method']}: {name}", key=f"btn-{m_id}"):
                 #("Hide manual" if opened else "▶ Watch manual"), key=f"btn-{m_id}"):
                 if opened:
                     st.query_params.clear()
@@ -201,7 +187,7 @@ def get_profile(user_id):
         return res.data[0]
     # create profile if not exists
     supabase.table("profiles").insert({"id": user_id}).execute()
-    return {"paid": False, "free_generations_used": 0, "last_generation_date": None}
+    return {"paid": False, "free_generations_used": 0, "last_generation_date": None, "preferred_language": "en"}
 
 def update_profile(user_id, data: dict):
     supabase.table("profiles").update(data).eq("id", user_id).execute()
@@ -247,36 +233,31 @@ if not st.session_state.user:
 # --------------------------------------------------
 user = st.session_state.user
 profile = get_profile(user.id)
+plan = profile.get("plan", "free")
+
+# Initialize language from profile ON FIRST LOGIN ONLY
+if not st.session_state.get("lang_initialized", False):
+    preferred = profile.get("preferred_language")
+    if preferred:
+        st.session_state.lang = preferred
+    st.session_state.lang_initialized = True
+
+lang = st.session_state.lang
+#reset_quotas_if_needed(profile)
 st.success(f"{tr('welcome')} {user.email}!")
 
 st.sidebar.button(tr("logout"), on_click=lambda: st.session_state.pop("user"))
 
+# Persist language change
+if profile.get("preferred_language") != st.session_state.lang:
+    supabase.table("profiles").update(
+        {"preferred_language": st.session_state.lang}
+    ).eq("id", user.id).execute()
 
-paid = profile.get("paid_now", False)
-if paid:
-    number_of_methods_to_show = 1000
-used = profile.get("free_generations_used", 0)
-last = profile.get("last_generation_date")
 
-today = str(date.today())
-can_generate = False
-
-if paid:
-    remaining = 7 - used
-    st.info(f"💎 {tr('premium_generations_notification')}: {remaining}")
-    can_generate = True
-else:
-    remaining = 7 - used
-    st.warning(f"🆓 {tr('free_tier_generations_notification')}: {remaining}")
-
-    if used >= 7:
-        st.error(tr("no_more_free_generations"))
-
-    elif last >= today:
-        st.error(tr("generate_last_day"))
-
-    else:
-        can_generate = True
+# --------------------------------------------------
+# AI generation
+# --------------------------------------------------
 
 #Manual “Pay” unlock
 #if not paid and st.button("💳 Mark as Paid (Manual)"):
@@ -285,9 +266,9 @@ else:
 
 st.markdown("---")
 
-# --------------------------------------------------
-# AI generation
-# --------------------------------------------------
+can_generate = False
+can_generate = can_generate_lesson(profile, plan)
+
 st.subheader(f"✨ {tr('generate_AI_subheader')}:")
 
 topic = st.text_input(f"{tr('enter_topic')}:")
@@ -342,7 +323,7 @@ for ms in selected_methods:
 # For debugging
 st.write(methods_steps)
 
-if st.button("Generate Lesson"):
+if st.button(tr("Generate Lesson")):
     if not topic:
         if not topic:
             st.warning(tr("enter_topic_first"))
@@ -373,12 +354,8 @@ if st.button("Generate Lesson"):
                 )
                 st.markdown(resp.choices[0].message.content)
 
-                # Update usage
-                if not paid:
-                    update_profile(user.id, {
-                        "free_generations_used": used + 1,
-                        "last_generation_date": today
-                    })
+                supabase.table("profiles").update(profile).eq("id", user.id).execute()
+
             except Exception as e:
                 st.error(f"{tr('api_error')}: {e}")
 
