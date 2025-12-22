@@ -44,36 +44,76 @@ import json
 #        print(f"Error fetching methods: {str(e)}")
 #        return []
 
+#
+#
+from datetime import date, datetime
+
 def reset_quotas_if_needed(profile):
     today = date.today()
+    updated_fields = {}
 
-    if profile.last_quota_reset_daily != today:
-        profile.lessons_used_daily = 0
-        profile.last_quota_reset_daily = today
+    # --- DAILY ---
+    last_daily = profile.get("last_quota_reset_daily")
+    if not last_daily or last_daily != today:
+        updated_fields["lessons_used_daily"] = 0
+        updated_fields["last_quota_reset_daily"] = today
 
-    if profile.last_quota_reset_weekly != today.isocalendar()[1]:
-        profile.lessons_used_weekly = 0
-        profile.last_quota_reset_weekly = today.isocalendar()[1]
+    # --- WEEKLY ---
+    current_week = today.isocalendar()[1]
+    last_week = None
+    if profile.get("last_quota_reset_weekly"):
+        last_week = profile["last_quota_reset_weekly"].isocalendar()[1]
 
-    if profile.last_quota_reset_monthly != today.month:
-        profile.lessons_used_monthly = 0
-        profile.last_quota_reset_monthly = today.month
+    if not last_week or last_week != current_week:
+        updated_fields["lessons_used_weekly"] = 0
+        updated_fields["last_quota_reset_weekly"] = today
 
-    save_profile(profile)
+    # --- MONTHLY ---
+    current_month = today.month
+    last_month = None
+    if profile.get("last_quota_reset_monthly"):
+        last_month = profile["last_quota_reset_monthly"].month
+
+    if not last_month or last_month != current_month:
+        updated_fields["lessons_used_monthly"] = 0
+        updated_fields["last_quota_reset_monthly"] = today
+
+    # If nothing changed, return the original
+    if not updated_fields:
+        return profile
+
+    # Merge changes into profile dict
+    profile.update(updated_fields)
+    return profile
 
 def can_generate_lesson(profile, plan):
-    #profile = get_profile(user.id)
-    #plan = profile.get("plan", "free")
 
-    reset_quotas_if_needed(profile)
+    profile = reset_quotas_if_needed(profile)
 
-    if profile.lessons_used_daily >= plan.lesson_daily:
+    daily   = profile.get("lessons_used_daily", 0)
+    weekly  = profile.get("lessons_used_weekly", 0)
+    monthly = profile.get("lessons_used_monthly", 0)
+    total   = profile.get("lessons_used_total", 0)
+
+    q_daily   = plan.get("lesson_daily")
+    q_weekly  = plan.get("lesson_weekly")
+    q_monthly = plan.get("lesson_monthly")
+    q_total   = plan.get("lesson_total")
+
+    # Daily
+    if q_daily is not None and daily >= q_daily:
         return False, "Daily quota exceeded"
-    if profile.lessons_used_weekly >= plan.lesson_weekly:
+
+    # Weekly
+    if q_weekly is not None and weekly >= q_weekly:
         return False, "Weekly quota exceeded"
-    if profile.lessons_used_monthly >= plan.lesson_monthly:
+
+    # Monthly
+    if q_monthly is not None and monthly >= q_monthly:
         return False, "Monthly quota exceeded"
-    if plan.lesson_total and profile.lessons_used_total >= plan.lesson_total:
+
+    # Total (lifetime)
+    if q_total is not None and total >= q_total:
         return False, "Total quota exceeded"
 
     return True, ""
@@ -87,13 +127,15 @@ def can_generate_lesson(profile, plan):
 #    return number_of_methods_to_show
 #
 def record_generation(profile):
-    profile.lessons_used_daily += 1
-    profile.lessons_used_weekly += 1
-    profile.lessons_used_monthly += 1
-    profile.lessons_used_total += 1
-    profile.total_generated_lessons += 1
-    profile.last_generation_date = date.today()
-    save_profile(profile)
+    profile["lessons_used_daily"]   = profile.get("lessons_used_daily", 0) + 1
+    profile["lessons_used_weekly"]  = profile.get("lessons_used_weekly", 0) + 1
+    profile["lessons_used_monthly"] = profile.get("lessons_used_monthly", 0) + 1
+    profile["lessons_used_total"]   = profile.get("lessons_used_total", 0) + 1
+
+    profile["last_generation_date"] = date.today()
+
+    return profile
+
 
 def method_lang(id_value):
     """Extracts the language code after the second hyphen."""
@@ -103,15 +145,19 @@ def method_lang(id_value):
     return parts[-1] if len(parts[-1]) == 2 else 'en'
 
 def safe_json_load(x):
-            if not x or x in ("", "null", "None"):
-                return []
-            if isinstance(x, (list, dict)):
-                return x
-            try:
-                return json.loads(x)
-            except Exception:
-                return [str(x)]
+    if not x or x in ("", "null", "None"):
+        return []
+    if isinstance(x, (list, dict)):
+        return x
+    try:
+        return json.loads(x)
+    except Exception:
+        return [str(x)]
 #            
 #UPDATE profiles
 #SET plan = 'free'
 #WHERE subscription_expiry < CURRENT_DATE;
+
+#
+#def update_profile(user_id, data: dict):
+    supabase.table("profiles").update(data).eq("id", user_id).execute()
