@@ -6,10 +6,10 @@ import uuid
 from datetime import date
 import time
 import hashlib
-from supabase import create_client, Client
+from supabase import create_client, ClientOptions, Client
 from openai import OpenAI
 from modules.languages import translations
-from modules.db_operations import record_generation, can_generate_lesson, method_lang, safe_json_load
+from modules.db_operations import record_generation, can_generate_lesson, safe_json_load
 
 # ==================================================
 # PAGE CONFIG
@@ -26,7 +26,51 @@ ALLOWED_LANGS = ["en", "cs", "fr", "es", "de"]
 # ==================================================
 url = st.secrets["supabase"]["url"]
 key = st.secrets["supabase"]["key"]
-supabase = create_client(url, key)
+
+if "anon_id" not in st.session_state:
+    st.session_state.anon_id = str(uuid.uuid4())
+
+anon_id = st.session_state.anon_id
+
+# ==================================================
+# SUPABASE CLIENT FACTORIES
+# ==================================================
+def get_guest_client():
+    return create_client(
+        url,
+        key,
+        options=ClientOptions(
+            headers={"x-anon-id": anon_id}
+        )
+    )
+
+def get_user_client(session):
+    return create_client(
+        url,
+        key,
+        options=ClientOptions(
+            headers={
+                "Authorization": f"Bearer {session.access_token}"
+            }
+        )
+    )
+
+# --------------------------------------------------
+# LOGIN INTENT (PERSISTED)
+# --------------------------------------------------
+action = st.query_params.get("action")
+action = action[0] if isinstance(action, list) else action
+
+if action == "login":
+    st.session_state.force_login = True
+
+# ==================================================
+# INITIAL CLIENT (guest by default)
+# ==================================================
+if "supabase" not in st.session_state:
+    st.session_state.supabase = get_guest_client()
+
+supabase = st.session_state.supabase
 
 # ==================================================
 # AUTH STATE
@@ -34,10 +78,11 @@ supabase = create_client(url, key)
 if "user" not in st.session_state:
     st.session_state.user = None
 
-if "anon_id" not in st.session_state:
-    st.session_state.anon_id = str(uuid.uuid4())
+if "session" not in st.session_state:
+    st.session_state.session = None
 
-anon_id = st.session_state.anon_id
+action = st.query_params.get("action")
+action = action[0] if isinstance(action, list) else action
 
 # ==================================================
 # LANGUAGE BOOTSTRAP 
@@ -68,27 +113,20 @@ elif st.session_state.get("user"):
 if "lang" not in st.session_state:
     st.session_state.lang = initial_lang
 
-# ==================================================
-# LANGUAGE SELECTOR (WIDGET OWNS STATE)
-# ==================================================
-st.sidebar.selectbox(
-    "🌐 Language / Jazyk / Langue / Idioma / Sprache",
-    ["en", "cs", "fr", "es", "de"],
-    key="lang",
-)
-
 lang = st.session_state.lang
 t = translations.get(lang, translations["en"])
 
-
 def tr(key: str) -> str:
     return translations[lang].get(key, f"⚠️ Missing translation: {key}")
-
 # ==================================================
 # AUTH UI (LOGIN / SIGNUP)
 # ==================================================
+force_login = st.session_state.pop("force_login", False)
+
 if not st.session_state.user:
-    with st.sidebar.expander("🔐 Login / Sign up"):
+    with st.sidebar.expander("🔐 Login / Sign up",
+        expanded=force_login
+    ):
         
         st.info(tr("promotion_mode"))
 
@@ -119,10 +157,32 @@ if not st.session_state.user:
                     )
                     if res.user:
                         st.session_state.user = res.user
-                        st.rerun()
+                        st.session_state.session = res.session
+
+                        # 🔥 switch to user client
+                        st.session_state.supabase = get_user_client(res.session)
+
+                        # 🔁 post-login redirect
+                        next_page = st.query_params.get("next")
+                        next_page = next_page[0] if isinstance(next_page, list) else next_page
+
+                        st.query_params.clear()
+
+                        if next_page == "billing":
+                            st.switch_page("pages/9_💳_Billing.py")
+                        else:
+                            st.rerun()
+
                 except Exception as e:
                     st.error(str(e))
-    
+# ==================================================
+# LANGUAGE SELECTOR (WIDGET OWNS STATE)
+# ==================================================
+st.sidebar.selectbox(
+    "🌐 Language / Jazyk / Langue / Idioma / Sprache",
+    ["en", "cs", "fr", "es", "de"],
+    key="lang",
+)
     
 # ==================================================
 # LOGGED-IN AREA
@@ -133,33 +193,45 @@ if user:
     st.sidebar.badge(f"👋 {user.email}")
 
 def get_profile(user_id):
-    res = supabase.table("profiles").select("*").eq("id", user_id).execute()
+    res = supabase.table("profiles").select("*").eq("user_id", user_id).execute()
     if res.data:
         return res.data[0]
 
     supabase.table("profiles").insert(
         {
-            "id": user_id,
+            "user_id": user_id,
             "preferred_language": st.session_state.lang,
             "plan": "free",
         }
     ).execute()
 
-    return {"preferred_language": st.session_state.lang, "plan": "free"}
+    return {
+        "user_id": user_id,
+        "preferred_language": st.session_state.lang,
+        "plan": "free",
+    }
 
 def get_guest():
-    res = supabase.table("guest_sessions").select("*").eq(
-        "anon_id", anon_id
-    ).execute()
+    # 🔐 ALWAYS use guest client for guest data
+    guest_supabase = get_guest_client()
+
+    res = (
+        guest_supabase
+        .table("guest_sessions")
+        .select("*")
+        .eq("anon_id", anon_id)
+        .execute()
+    )
 
     if res.data:
         return res.data[0]
 
-    supabase.table("guest_sessions").insert({
+    guest_supabase.table("guest_sessions").insert({
         "anon_id": anon_id
     }).execute()
 
     return {"lessons_generated": 0}
+
 
 if user:
     profile = get_profile(user.id)
@@ -233,10 +305,15 @@ methods = load_visible_methods()
 # ==================================================
 if user:
     st.success(f"{tr('welcome')} {user.email}")
-st.sidebar.button(
-    tr("logout"),
-    on_click=lambda: st.session_state.pop("user"),
-)
+
+def logout():
+    st.session_state.user = None
+    st.session_state.session = None
+    st.session_state.supabase = get_guest_client()
+    st.query_params.clear()
+    st.rerun()
+
+st.sidebar.button(tr("logout"), on_click=logout)
 
 if not user:
     st.info(
