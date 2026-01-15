@@ -10,7 +10,18 @@ from supabase import create_client, ClientOptions, Client
 from openai import OpenAI
 from modules.languages import translations
 from modules.db_operations import record_generation, can_generate_lesson, safe_json_load
+from streamlit_cookies_manager import EncryptedCookieManager
 
+# ==================================================
+# cookies
+# ==================================================
+cookies = EncryptedCookieManager(
+    prefix="didact",
+    password=st.secrets["cookie_password"],  # add to secrets.toml
+)
+
+if not cookies.ready():
+    st.stop()
 # ==================================================
 # PAGE CONFIG
 # ==================================================
@@ -53,6 +64,22 @@ def get_user_client(session):
                 "Authorization": f"Bearer {session.access_token}"
             }
         )
+    )
+# =============================================
+# Restore session on app start (CRITICAL FIX)
+# -============================================
+if "user" not in st.session_state:
+    st.session_state.user = None
+if "session" not in st.session_state:
+    st.session_state.session = None
+
+# 🔁 RESTORE SESSION FROM COOKIE
+if st.session_state.user is None and cookies.get("supabase_session"):
+    session_data = json.loads(cookies["supabase_session"])
+    st.session_state.session = session_data
+    st.session_state.user = session_data["user"]
+    st.session_state.supabase = get_user_client(
+        type("Session", (), {"access_token": session_data["access_token"]})
     )
 
 # --------------------------------------------------
@@ -164,6 +191,15 @@ if not st.session_state.user:
 
                         # 🔥 switch to user client
                         st.session_state.supabase = get_user_client(res.session)
+
+                        cookies["supabase_session"] = json.dumps({
+                            "access_token": res.session.access_token,
+                            "user": {
+                                "id": res.user.id,
+                                "email": res.user.email,
+                            },
+                        })
+                        cookies.save()
 
                         # 🔁 post-login redirect
                         next_page = st.query_params.get("next")
@@ -316,6 +352,8 @@ if user:
         st.session_state.user = None
         st.session_state.session = None
         st.session_state.supabase = get_guest_client()
+        cookies.pop("supabase_session", None)
+        cookies.save()
         st.query_params.clear()
         st.rerun()
 
