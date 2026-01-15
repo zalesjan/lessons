@@ -4,7 +4,6 @@ translations = {
     # ENGLISH
     # ----------------------------------------------------------------------
      # Billing page
-        "title": "idact-io = Great Teaching Methods in a few seconds",
         "billing_title": "Upgrade to Didact.io Pro",
         "billing_intro": "Unlock full access to teaching methods and higher AI generation limits.",
         "billing_no_plans": "No subscription plans are available at the moment.",
@@ -12,9 +11,30 @@ translations = {
         "billing_recommended": "Recommended",
         "billing_select_plan": "Select {label} plan",
         "billing_select_prompt": "Select a plan above to continue to checkout.",
-        "billing_ai_limit": "{ai_generations} AI-generated lessons per day",
+        "billing_ai_limit": "{ai_generations}",
         "billing_ai_unlimited": "Unlimited AI-generated lessons",
-        "billing_conditions": "Subscription Conditions",
+    "billing_login_required_title": "Login required",
+    "billing_login_required_text": "Please sign in or create an account to manage your subscription.",
+    "billing_login_cta": "Sign in or create account at the main page",
+"billing_feature_ai_daily": "AI lessons / day",
+"billing_feature_ai_weekly": "AI lessons / week",
+"billing_feature_ai_monthly": "AI lessons / month",
+
+"billing_feature_methods_weekly": "Methods / week",
+"billing_feature_methods_total": "Methods total",
+
+    "billing_feature_price": "Price",
+    "billing_feature_ai_limit": "AI lesson generation",
+
+    "billing_current_plan": "Current plan",
+
+    "billing_conditions_title": "Subscription conditions",
+    "billing_conditions_text": (
+        "- Cancel anytime via the billing portal\n"
+        "- Secure payment handled by **Stripe**\n"
+        "- We never see or store your payment details\n"
+        "- VAT and invoices handled automatically"
+    ),
         "billing_checkout": "Proceed to checkout",
         "billing_redirecting": "Redirecting to secure payment...",
         "billing_checkout_failed": "Unable to start checkout session.",
@@ -22,7 +42,7 @@ translations = {
         
         # about text
         "about_short": """
-# 🧩 Didact-io
+# 🧩 About Didact-io:
 
 Didact-io is a simple, fast way to bring more clarity, structure, and variety into your lessons.
 
@@ -118,6 +138,10 @@ Soon you'll be able to build full lessons and combine reusable blocks.
     ,
         
         # Main screen
+        "adapt_with_ai_login_title1": "Find a Cool Teaching Method First", 
+        "adapt_with_ai_login_title": "If You Like, Adapt it to Your Topic with AI!",
+        "log_to_use": "Log in to use AI or explore more teaching methods. Use Login button in the left pane",
+        "title": "Didact-io = Great Teaching Methods in a few seconds",
         "title": "Composed Lesson Variants",
         "subtitle": "Each variant centers a different method and includes 1–2 lead-in and 1–2 consolidation steps.",
         "before": "**People tried this method before:**",
@@ -138,7 +162,6 @@ Soon you'll be able to build full lessons and combine reusable blocks.
         "tips": "Tips",
 
         # Auth
-        "adapt_with_ai_login_title": "Adapt the Method to Your Topic with AI! Log in to use AI or explore more teaching methods.",
         "promotion_mode": "PROMOTION MODE – you can see 7 methods not signed in, 10 methods in free tier, and all in paid tier.",
         "select_to": "Select to:",
         "login": "Login",
@@ -181,7 +204,22 @@ Soon you'll be able to build full lessons and combine reusable blocks.
 "billing_select_prompt": "Select a plan above to continue to checkout.",
 "billing_ai_limit": "{ai_generations} AI-generated lessons per day",
 "billing_ai_unlimited": "Unlimited AI-generated lessons",
-"billing_conditions": "Subscription Conditions",
+    "billing_login_required_title": "Vyžadováno přihlášení",
+    "billing_login_required_text": "Pro správu předplatného se prosím přihlaste nebo si vytvořte účet.",
+    "billing_login_cta": "Přihlásit se nebo vytvořit účet",
+
+    "billing_feature_price": "Cena",
+    "billing_feature_ai_limit": "Generování lekcí pomocí AI",
+
+    "billing_current_plan": "Aktuální tarif",
+
+    "billing_conditions_title": "Podmínky předplatného",
+    "billing_conditions_text": (
+        "- Zrušení kdykoliv v platebním portálu\n"
+        "- Bezpečná platba přes **Stripe**\n"
+        "- Neuchováváme žádné platební údaje\n"
+        "- DPH a faktury zpracovány automaticky"
+    ),
 "billing_checkout": "Proceed to checkout",
 "billing_redirecting": "Redirecting to secure payment...",
 "billing_checkout_failed": "Unable to start checkout session.",
@@ -192,7 +230,6 @@ Soon you'll be able to build full lessons and combine reusable blocks.
         "billing_select_prompt": "Vyber tarif, který ti nejlépe vyhovuje:",
         
         # about text
-        "title": "Didact-io = Didaktické metody ihned",
         "about_short": """
 # 🧩 O aplikaci Didact-io
 
@@ -290,6 +327,11 @@ Brzy budete moci stavět celé lekce a kombinovat předpřipravené bloky.
 """
 ,
         # Main screen
+
+        "adapt_with_ai_login_title1": "Najdi si super didaktickou metodu", 
+        "adapt_with_ai_login_title": "Jestli chceš, adaptuj metodu na své téma pomocí AI!",
+        "log_to_use": " Přihlaš se a získej přístup k více metodám a AI adaptacím.",
+        "title": "Didact-io = Didaktické metody ihned",
         "subtitle": "Každá varianta staví na jiné hlavní metodě a obsahuje 1–2 úvodní a 1–2 závěrečné aktivity.",
         "before": "Toto můžeš zařadit před:",
         "main_method": "Doporučený postup",
@@ -329,7 +371,6 @@ Brzy budete moci stavět celé lekce a kombinovat předpřipravené bloky.
         "generate_last_day": "Dnes jsi již generoval(a).",
 
         # AI generation
-        "adapt_with_ai_login_title": "Adaptuj metodu na své téma pomocí AI! Přihlaš se a získej přístup k více metodám.",
         "generate_AI_subheader": "Generovat lekci pomocí AI",
         "generate_button": "Vygeneruj lekci!",
         "selected_methods": "Vybrané metody",
@@ -349,7 +390,22 @@ Brzy budete moci stavět celé lekce a kombinovat předpřipravené bloky.
 "billing_select_prompt": "Sélectionnez une formule ci-dessus pour continuer vers le paiement.",
 "billing_ai_limit": "{ai_generations} leçons générées par IA par jour",
 "billing_ai_unlimited": "Génération IA illimitée",
-"billing_conditions": "Conditions d’abonnement",
+    "billing_login_required_title": "Connexion requise",
+    "billing_login_required_text": "Veuillez vous connecter ou créer un compte pour gérer votre abonnement.",
+    "billing_login_cta": "Se connecter ou créer un compte",
+
+    "billing_feature_price": "Prix",
+    "billing_feature_ai_limit": "Génération de leçons par IA",
+
+    "billing_current_plan": "Abonnement actuel",
+
+    "billing_conditions_title": "Conditions d’abonnement",
+    "billing_conditions_text": (
+        "- Résiliation possible à tout moment\n"
+        "- Paiement sécurisé via **Stripe**\n"
+        "- Nous ne stockons aucune donnée de paiement\n"
+        "- TVA et factures gérées automatiquement"
+    ),
 "billing_checkout": "Procéder au paiement",
 "billing_redirecting": "Redirection vers un paiement sécurisé…",
 "billing_checkout_failed": "Impossible de créer une session de paiement.",
@@ -445,6 +501,10 @@ Saisissez un thème → choisissez des méthodes → obtenez une version adapté
 Création de leçons complètes et blocs combinables.
 """,
         # Main screen
+        "adapt_with_ai_login_title1": "Trouve une nouvelle méthode didactique superbe!", 
+        "adapt_with_ai_login_title": "Si tu veux, adapte la méthode à ton thème avec l’IA !",
+        "log_to_use": "Connecte-toi pour utiliser l’IA ou explorer plus de méthodes.",
+
         "title": "Didact-io: Méthodes didactiques",
         "subtitle": "Chaque variante met en avant une méthode principale et inclut des activités d’introduction et d’activités de consolidation.",
         "before": "À utiliser avant :",
@@ -485,7 +545,6 @@ Création de leçons complètes et blocs combinables.
         "generate_last_day": "Tu as déjà généré une leçon aujourd’hui.",
        
         # AI generation
-        "adapt_with_ai_login_title": "Adapte la méthode à ton thème avec l’IA ! Connecte-toi pour utiliser l’IA ou explorer plus de méthodes.",
         "generate_AI_subheader": "Générer une leçon adaptée par l’IA",
         "generate_button": "Générer",
         "selected_methods": "Méthodes sélectionnées",
@@ -508,7 +567,22 @@ Création de leçons complètes et blocs combinables.
 "billing_select_prompt": "Selecciona un plan arriba para continuar al pago.",
 "billing_ai_limit": "{ai_generations} lecciones generadas por IA al día",
 "billing_ai_unlimited": "Generación ilimitada por IA",
-"billing_conditions": "Condiciones de suscripción",
+    "billing_login_required_title": "Inicio de sesión requerido",
+    "billing_login_required_text": "Inicia sesión o crea una cuenta para gestionar tu suscripción.",
+    "billing_login_cta": "Iniciar sesión o crear cuenta",
+
+    "billing_feature_price": "Precio",
+    "billing_feature_ai_limit": "Generación de lecciones con IA",
+
+    "billing_current_plan": "Plan actual",
+
+    "billing_conditions_title": "Condiciones de suscripción",
+    "billing_conditions_text": (
+        "- Cancela en cualquier momento desde el portal de pagos\n"
+        "- Pago seguro gestionado por **Stripe**\n"
+        "- No almacenamos datos de pago\n"
+        "- IVA y facturación gestionados automáticamente"
+    ),
 "billing_checkout": "Ir al pago",
 "billing_redirecting": "Redirigiendo al pago seguro…",
 "billing_checkout_failed": "No se pudo iniciar la sesión de pago.",
@@ -606,6 +680,11 @@ Construcción de clases completas y bloques combinables.
 """
     ,
         # Main screen
+
+        "adapt_with_ai_login_title1": "Descubra un nuevo método didáctico!", 
+        "adapt_with_ai_login_title": "Adapta el método a tu tema con IA.",
+        "log_to_use": "Inicia sesión para usar IA o explorar más métodos.",
+
         "title": "Didact-io = Métodos didácticos perfectos para todos!",
         "subtitle": "Cada variante se centra en un método principal e incluye actividades iniciales, principales y finales.",
         "before": "Puedes usar esto antes de:",
@@ -626,7 +705,6 @@ Construcción de clases completas y bloques combinables.
         "tips": "Consejos",
        
         # Auth
-        "adapt_with_ai_login_title": "Adapta el método a tu tema con IA. Inicia sesión para usar IA o explorar más métodos.",
         "promotion_mode": "Modo promoción – 7 métodos sin sesión, 10 métodos en modo gratuito y todos en modo premium.",
         "select_to": "Selecciona:",
         "login": "Iniciar sesión",
@@ -667,7 +745,22 @@ Construcción de clases completas y bloques combinables.
 "billing_select_prompt": "Wähle oben einen Tarif aus, um zum Checkout fortzufahren.",
 "billing_ai_limit": "{ai_generations} KI-generierte Lektionen pro Tag",
 "billing_ai_unlimited": "Unbegrenzte KI-Generierung",
-"billing_conditions": "Abonnementbedingungen",
+    "billing_login_required_title": "Anmeldung erforderlich",
+    "billing_login_required_text": "Bitte melde dich an oder erstelle ein Konto, um dein Abonnement zu verwalten.",
+    "billing_login_cta": "Anmelden oder Konto erstellen",
+
+    "billing_feature_price": "Preis",
+    "billing_feature_ai_limit": "KI-gestützte Unterrichtsgenerierung",
+
+    "billing_current_plan": "Aktueller Tarif",
+
+    "billing_conditions_title": "Abonnementbedingungen",
+    "billing_conditions_text": (
+        "- Jederzeit kündbar über das Abrechnungsportal\n"
+        "- Sichere Zahlung über **Stripe**\n"
+        "- Wir speichern keine Zahlungsdaten\n"
+        "- MwSt. und Rechnungen werden automatisch verarbeitet"
+    ),
 "billing_checkout": "Zum Checkout",
 "billing_redirecting": "Weiterleitung zur sicheren Zahlung…",
 "billing_checkout_failed": "Die Checkout-Sitzung konnte nicht gestartet werden.",
@@ -763,6 +856,10 @@ Thema eingeben → Methoden wählen → angepasste Version erzeugen.
 Bald: vollständige Unterrichtseinheiten und kombinierbare Bausteine.
 """,
         # Main screen
+        "adapt_with_ai_login_title1": "Such dir zuerst eine coole Lehrmethode aus", 
+        "adapt_with_ai_login_title": "Passe die Methode mit KI an dein Thema an!",
+        "log_to_use": "Logge dich ein, um KI zu benutzen oder mehr Methoden zu sehen.",
+
         "title": "Didact-io = Didaktische Methoden für Alles",
         "subtitle": "Jede Variante basiert auf einer Methode und enthält 1–2 Einstiegs- und 1–2 Abschlussaktivitäten.",
         "before": "Dies kannst du davor einsetzen:",
@@ -783,7 +880,6 @@ Bald: vollständige Unterrichtseinheiten und kombinierbare Bausteine.
         "tips": "Tipps",
 
         # Auth
-        "adapt_with_ai_login_title": "Passe die Methode mit KI an dein Thema an! Logge dich ein, um KI zu benutzen oder mehr Methoden zu sehen.",
         "promotion_mode": "PROMO-MODUS – 7 Methoden ohne Login, 10 im kostenlosen Modus, alle im Premium-Modus.",
         "select_to": "Auswählen:",
         "login": "Login",

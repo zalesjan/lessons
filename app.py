@@ -84,6 +84,9 @@ if "session" not in st.session_state:
 action = st.query_params.get("action")
 action = action[0] if isinstance(action, list) else action
 
+if "about_mode" not in st.session_state:
+    st.session_state.about_mode = None
+
 # ==================================================
 # LANGUAGE BOOTSTRAP 
 # ==================================================
@@ -128,7 +131,7 @@ if not st.session_state.user:
         expanded=force_login
     ):
         
-        st.info(tr("promotion_mode"))
+        #st.info(tr("promotion_mode"))
 
         mode = st.radio(
             tr("select_to"),
@@ -175,6 +178,7 @@ if not st.session_state.user:
 
                 except Exception as e:
                     st.error(str(e))
+
 # ==================================================
 # LANGUAGE SELECTOR (WIDGET OWNS STATE)
 # ==================================================
@@ -231,7 +235,6 @@ def get_guest():
     }).execute()
 
     return {"lessons_generated": 0}
-
 
 if user:
     profile = get_profile(user.id)
@@ -306,21 +309,19 @@ methods = load_visible_methods()
 if user:
     st.success(f"{tr('welcome')} {user.email}")
 
-def logout():
-    st.session_state.user = None
-    st.session_state.session = None
-    st.session_state.supabase = get_guest_client()
-    st.query_params.clear()
-    st.rerun()
+    def logout():
+        st.session_state.user = None
+        st.session_state.session = None
+        st.session_state.supabase = get_guest_client()
+        st.query_params.clear()
+        st.rerun()
 
-st.sidebar.button(tr("logout"), on_click=logout)
+    st.sidebar.button(tr("logout"), on_click=logout)
 
 if not user:
-    st.info(
-        f"👋 Guest mode\n\n"
-        f"- {GUEST_METHODS_VISIBLE} methods\n"
-        f"- {GUEST_AI_GENERATIONS} AI lesson\n"
-        f"Create a free account to unlock more."
+    st.error(
+        f"👋 Guest mode: {GUEST_METHODS_VISIBLE} methods visible - {GUEST_AI_GENERATIONS} AI adaptations\n"
+        f"- Create a free account to unlock more."
     )
 
 # ==================================================
@@ -341,13 +342,39 @@ else:
 
 
 # ==================================================
-#METHODS PAGE RENDERING GOES HERE ----
-# (UNCHANGED – paste your existing block)
+#METHODS PAGE RENDERING 
 # ==================================================
+st.title(f"🎓 {tr('adapt_with_ai_login_title1')}")
 st.title(f"🎓 {tr('adapt_with_ai_login_title')}")
-st.markdown(tr("about_short"))
+if not user: 
+    st.error(tr("log_to_use"))
+
+def toggle_about(mode):
+    st.session_state.about_mode = (
+        None if st.session_state.about_mode == mode else mode
+    )
+    st.rerun()
+    
+cols = st.columns(2)
+
+with cols[0]:
+    if st.button(tr("about_short_btn")):
+        toggle_about("short")
+
+with cols[1]:
+    if st.button(tr("about_full_btn")):
+        toggle_about("full")
+
+
+if st.session_state.about_mode == "short":
+    st.info(tr("about_short"))
+
+elif st.session_state.about_mode == "full":
+    st.info(tr("about_full"))
+
+#st.info(tr("about_short"))
 st.title(tr("title"))
-st.caption(tr("subtitle"))
+st.write(tr("subtitle"))
 
 #######
 visible = (
@@ -367,7 +394,11 @@ else:
 filtered_methods = visible[:number_of_methods_to_show]
 method_names = [m["name"] for m in filtered_methods if "id" in m]
 method_qs = st.query_params.get("method", None)
+method_qs = method_qs[0] if isinstance(method_qs, list) else method_qs
 
+# Auto-collapse About when a method is opened
+if method_qs:
+    st.session_state.about_mode = None
 # --------------------------------------------------            
 # --- Render ---
 # --------------------------------------------------
@@ -392,16 +423,53 @@ for m in filtered_methods:
             st.subheader(name)
             if description:
                 st.write(description)
+        
+
+            meta = []
+            if m.get("age_group"):
+                vals = safe_json_load(m["age_group"])
+                if vals:
+                    meta.append(f"**{t['level']}:** " + ", ".join(map(str, vals)))
+
+            if m.get("tags"):
+                        meta.append(str(m["tags"]))
+
+            if m.get("time"):
+                meta.append(f"**{tr('time')}:** {m['time']}")
+
+            if m.get("tools"):
+                mats = safe_json_load(m["tools"])
+                if mats:
+                    meta.append(f"**{t['materials']}:** " + ", ".join(map(str, mats)))
+
+            if meta:
+                st.info(" · ".join(meta))
+
+        # --- RIGHT: button ---
         with cols[1]:
-            if st.button(tr("Hide manual") if opened else f"▶ {t['open_method']}: {name}", key=f"btn-{m_id}"):
-                #("Hide manual" if opened else "▶ Watch manual"), key=f"btn-{m_id}"):
+            if st.button(
+                tr("Hide manual") if opened else f"▶ {t['open_method']}",
+                key=f"btn-{m_id}"
+            ):
                 if opened:
                     st.query_params.clear()
                 else:
                     st.query_params["method"] = m_id
-                st.rerun()
 
-        with cols[1]:
+                st.rerun()
+                
+        if opened:
+            # ---------- MAIN CONTENT ----------
+            if content:
+                st.markdown(f"##### {t['main_method']}")
+                for step in sorted(content, key=lambda x: x.get("order", 0)):
+                    title = step.get("title", "")
+                    activity = step.get("activity", "")
+                    minutes = step.get("minutes")
+                    mins = f" — {minutes} min" if minutes else ""
+                    st.markdown(f"- **{title}**{mins}  \n  {activity}")
+            
+            # ---------- BEFORE ----------
             if before:
                 st.markdown(f"##### {t['before']}")
                 for step in sorted(before, key=lambda x: x.get("order", 0)):
@@ -410,8 +478,8 @@ for m in filtered_methods:
                     minutes = step.get("minutes")
                     mins = f" — {minutes} min" if minutes else ""
                     st.markdown(f"- **{title}**{mins}  \n  {activity}")
-
-        with cols[1]:
+            
+            # ---------- AFTER ----------
             if after:
                 st.markdown(f"##### {t['after']}")
                 for step in sorted(after, key=lambda x: x.get("order", 0)):
@@ -421,47 +489,24 @@ for m in filtered_methods:
                     mins = f" — {minutes} min" if minutes else ""
                     st.markdown(f"- **{title}**{mins}  \n  {activity}")
 
-        meta = []
-        if m.get("age_group"):
-            vals = safe_json_load(m["age_group"])
-            if vals:
-                meta.append(f"**{t['level']}:** " + ", ".join(map(str, vals)))
+            # ---------- TOOLS ----------
+            if m.get("tools"):
+                mats = safe_json_load(m["tools"])
+                if mats:
+                    st.markdown(
+                        f"**{t['materials']}:** " + ", ".join(map(str, mats))
+                    )
 
-        if m.get("tags"):
-                    meta.append(str(m["tags"]))
+            # ---------- TIPS ----------
+            if tips:
+                tips = json.loads(tips) if isinstance(tips, str) else tips
+                st.markdown(f"**{tr('tips')}**")
+                for tip in tips:
+                    st.markdown(f"- {tip}")
 
-        if m.get("time"):
-            meta.append(f"**{tr('time')}:** {m['time']}")
-
-        if m.get("tools"):
-            mats = safe_json_load(m["tools"])
-            if mats:
-                meta.append(f"**{t['materials']}:** " + ", ".join(map(str, mats)))
-
-        if meta:
-            st.write(" · ".join(meta))
-
-        # Steps
-        if content:
-            st.markdown(f"##### {t['main_method']}")
-            for step in sorted(content, key=lambda x: x.get("order", 0)):
-                title = step.get("title", "")
-                activity = step.get("activity", "")
-                minutes = step.get("minutes")
-                mins = f" — {minutes} min" if minutes else ""
-                st.markdown(f"- **{title}**{mins}  \n  {activity}")
-
-        # Tips
-        if tips:
-            tips = json.loads(tips) if isinstance(tips, str) else tips
-            st.markdown(f"**{tr('tips')}**")
-
-            for tip in tips:
-                st.markdown(f"- {tip}")
-
-        # Video
-        if opened and m.get("videoUrl"):
-            st.video(m["videoUrl"])
+            # ---------- VIDEO ----------
+            #if m.get("videoUrl"):
+            #    st.video(m["videoUrl"])
 
 # ==================================================
 # AI GENERATION (UNCHANGED)
