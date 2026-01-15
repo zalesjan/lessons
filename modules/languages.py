@@ -19,7 +19,6 @@ translations = {
 "billing_feature_ai_daily": "AI lessons / day",
 "billing_feature_ai_weekly": "AI lessons / week",
 "billing_feature_ai_monthly": "AI lessons / month",
-
 "billing_feature_methods_weekly": "Methods / week",
 "billing_feature_methods_total": "Methods total",
 
@@ -41,6 +40,8 @@ translations = {
         "billing_proceed_payment": "Proceed to secure payment",
         
         # about text
+        "about_short_btn": "About Didact.io - short",
+        "about_full_btn": "About Didact.io - full version",
         "about_short": """
 # 🧩 About Didact-io:
 
@@ -230,6 +231,8 @@ Soon you'll be able to build full lessons and combine reusable blocks.
         "billing_select_prompt": "Vyber tarif, který ti nejlépe vyhovuje:",
         
         # about text
+        "about_short_btn": "Co je Didact.io - krátce",
+        "about_full_btn": "Co je Didact.io - dlouze",
         "about_short": """
 # 🧩 O aplikaci Didact-io
 
@@ -412,6 +415,8 @@ Brzy budete moci stavět celé lekce a kombinovat předpřipravené bloky.
 "billing_proceed_payment": "Procéder au paiement sécurisé",
         
         # about text
+        "about_short_btn": "About Didact.io - short",
+        "about_full_btn": "About Didact.io - full version",
         "about_short": """
 # 🧩 Didact-io
 
@@ -590,6 +595,8 @@ Création de leçons complètes et blocs combinables.
 
 
         # about text
+        "about_short_btn": "Acerca de Didact.io - short",
+        "about_full_btn": "Acerca de Didact.io - full version",
          "about_short": """
 # 🧩 Acerca de Didact-io
 
@@ -767,6 +774,8 @@ Construcción de clases completas y bloques combinables.
 "billing_proceed_payment": "Weiter zur sicheren Zahlung",
 
         # about text
+        "about_short_btn": "Über das Didact.io - short",
+        "about_full_btn": "Über das Didact.io - full version",
         "about_short": """
 # 🧩 Über das Didact-io
 

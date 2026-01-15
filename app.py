@@ -196,6 +196,7 @@ user = st.session_state.user
 if user:
     st.sidebar.badge(f"👋 {user.email}")
 
+@st.cache_data(ttl=300)
 def get_profile(user_id):
     res = supabase.table("profiles").select("*").eq("user_id", user_id).execute()
     if res.data:
@@ -215,6 +216,7 @@ def get_profile(user_id):
         "plan": "free",
     }
 
+@st.cache_data(ttl=300)
 def get_guest():
     # 🔐 ALWAYS use guest client for guest data
     guest_supabase = get_guest_client()
@@ -262,6 +264,7 @@ if user and profile.get("preferred_language") != st.session_state.lang:
 
 tier = profile["plan"] if user else "guest"
 #bucket = compute_bucket(user.id if user else anon_id)
+@st.cache_data(ttl=300)
 def load_visible_methods():
     today = date.today().isoformat()
 
@@ -307,7 +310,7 @@ methods = load_visible_methods()
 # UI HEADER
 # ==================================================
 if user:
-    st.success(f"{tr('welcome')} {user.email}")
+    #st.success(f"{tr('welcome')} {user.email}")
 
     def logout():
         st.session_state.user = None
@@ -327,7 +330,6 @@ if not user:
 # ==================================================
 # LOAD PLAN
 # ==================================================
-
 if user:
     plan = (
         supabase.table("plans")
@@ -340,20 +342,21 @@ if user:
 else:
     plan = None
 
-
 # ==================================================
-#METHODS PAGE RENDERING 
+# UI Header
 # ==================================================
 st.title(f"🎓 {tr('adapt_with_ai_login_title1')}")
 st.title(f"🎓 {tr('adapt_with_ai_login_title')}")
 if not user: 
     st.error(tr("log_to_use"))
 
+# ==================================================
+# ABOUT SECTION
+# ==================================================
 def toggle_about(mode):
     st.session_state.about_mode = (
         None if st.session_state.about_mode == mode else mode
     )
-    st.rerun()
     
 cols = st.columns(2)
 
@@ -365,14 +368,15 @@ with cols[1]:
     if st.button(tr("about_full_btn")):
         toggle_about("full")
 
-
 if st.session_state.about_mode == "short":
     st.info(tr("about_short"))
 
 elif st.session_state.about_mode == "full":
     st.info(tr("about_full"))
 
-#st.info(tr("about_short"))
+# ==================================================
+#METHODS PAGE RENDERING (possibly move first part - titles - to UI Header)
+# ==================================================
 st.title(tr("title"))
 st.write(tr("subtitle"))
 
