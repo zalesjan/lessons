@@ -2,3 +2,5 @@ psycopg2-binary
 werkzeug
 openai>=1.0.0
 supabase>=2.5.0
+streamlit-cookies-manager
+
