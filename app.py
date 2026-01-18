@@ -68,7 +68,7 @@ def get_user_client_cached(session):
         )
     )
 # =============================================
-# Restore session on app start (CRITICAL FIX)
+# Initiate sessions + Restore from cookies on re-start
 # -============================================
 if "user" not in st.session_state:
     st.session_state.user = None
@@ -83,6 +83,11 @@ if st.session_state.user is None and cookies.get("supabase_session"):
     st.session_state.supabase = get_user_client_cached(
         type("Session", (), {"access_token": session_data["access_token"]})
     )
+
+if "ai_result" not in st.session_state:
+    st.session_state.ai_result = None
+if "ai_topic" not in st.session_state:
+    st.session_state.ai_topic = None
 
 # --------------------------------------------------
 # LOGIN INTENT (PERSISTED)
@@ -670,7 +675,8 @@ if selected_names:
                         messages=[{"role": "user", "content": prompt}],
                         max_tokens=350,
                     )
-                    st.markdown(resp.choices[0].message.content)
+                    st.session_state.ai_result = resp.choices[0].message.content
+                    st.session_state.ai_topic = topic
 
                     if user:
                         profile = record_generation(profile)
@@ -684,4 +690,13 @@ if selected_names:
 
                 except Exception as e:
                     st.error(f"{tr('api_error')}: {e}")
+
+if st.session_state.ai_result:
+    st.markdown("---")
+    #st.subheader(f"✨ {tr('generated_lesson')}")
+    if st.session_state.ai_topic:
+        st.caption(f"🧠 {st.session_state.ai_topic}")
+
+    st.markdown(st.session_state.ai_result)
+
 
