@@ -17,7 +17,7 @@ from streamlit_cookies_manager import EncryptedCookieManager
 # ==================================================
 cookies = EncryptedCookieManager(
     prefix="didact",
-    password=st.secrets["cookie_password"],  # add to secrets.toml
+    password=st.secrets["cookies"]["cookie_password"],  # add to secrets.toml
 )
 
 if not cookies.ready():
@@ -46,7 +46,8 @@ anon_id = st.session_state.anon_id
 # ==================================================
 # SUPABASE CLIENT FACTORIES
 # ==================================================
-def get_guest_client():
+@st.cache_resource
+def get_guest_client_cached():
     return create_client(
         url,
         key,
@@ -55,7 +56,8 @@ def get_guest_client():
         )
     )
 
-def get_user_client(session):
+@st.cache_resource
+def get_user_client_cached(session):
     return create_client(
         url,
         key,
@@ -78,7 +80,7 @@ if st.session_state.user is None and cookies.get("supabase_session"):
     session_data = json.loads(cookies["supabase_session"])
     st.session_state.session = session_data
     st.session_state.user = session_data["user"]
-    st.session_state.supabase = get_user_client(
+    st.session_state.supabase = get_user_client_cached(
         type("Session", (), {"access_token": session_data["access_token"]})
     )
 
@@ -95,7 +97,7 @@ if action == "login":
 # INITIAL CLIENT (guest by default)
 # ==================================================
 if "supabase" not in st.session_state:
-    st.session_state.supabase = get_guest_client()
+    st.session_state.supabase = get_guest_client_cached()
 
 supabase = st.session_state.supabase
 
@@ -190,7 +192,7 @@ if not st.session_state.user:
                         st.session_state.session = res.session
 
                         # 🔥 switch to user client
-                        st.session_state.supabase = get_user_client(res.session)
+                        st.session_state.supabase = get_user_client_cached(res.session)
 
                         cookies["supabase_session"] = json.dumps({
                             "access_token": res.session.access_token,
@@ -255,7 +257,7 @@ def get_profile(user_id):
 @st.cache_data(ttl=300)
 def get_guest():
     # 🔐 ALWAYS use guest client for guest data
-    guest_supabase = get_guest_client()
+    guest_supabase = get_guest_client_cached()
 
     res = (
         guest_supabase
@@ -351,7 +353,7 @@ if user:
     def logout():
         st.session_state.user = None
         st.session_state.session = None
-        st.session_state.supabase = get_guest_client()
+        st.session_state.supabase = get_guest_client_cached()
         cookies.pop("supabase_session", None)
         cookies.save()
         st.query_params.clear()
