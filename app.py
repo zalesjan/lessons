@@ -10,6 +10,7 @@ from supabase import create_client, ClientOptions, Client
 from openai import OpenAI
 from modules.languages import translations
 from modules.db_operations import record_generation, can_generate_lesson, can_generate_guest, safe_json_load
+from modules.language_manager import LanguageManager
 from streamlit_cookies_manager import EncryptedCookieManager
 
 # ==================================================
@@ -47,7 +48,7 @@ if COOKIE_PASSWORD:
 # ==================================================
 st.set_page_config(page_title="Didact-io", page_icon="🧩", layout="wide")
 
-ALLOWED_LANGS = ["en", "cs", "fr", "es", "de"]
+#ALLOWED_LANGS = ["en", "cs", "fr", "es", "de"]
 
 # ==================================================
 # SUPABASE
@@ -176,37 +177,38 @@ if "supabase" not in st.session_state:
 # ==================================================
 # LANGUAGE BOOTSTRAP 
 # ==================================================
-query_lang = st.query_params.get("lang")
-if isinstance(query_lang, list):
-    query_lang = query_lang[0]
-
-# Default
-initial_lang = "en"
-
-# URL has priority
-if query_lang in ["en", "cs", "fr", "es", "de"]:
-    initial_lang = query_lang
-
-# If logged in already, profile may exist
-elif st.session_state.get("user"):
-    try:
-        res = ensure_supabase_client().table("profiles").select(
-            "preferred_language"
-        ).eq("id", st.session_state.user["id"]).execute()
-        if res.data and res.data[0].get("preferred_language"):
-            initial_lang = res.data[0]["preferred_language"]
-    except Exception:
-        pass
-
-# Initialize ONCE, before widget
-if "lang" not in st.session_state:
-    st.session_state.lang = initial_lang
-
-lang = st.session_state.lang
-t = translations.get(lang, translations["en"])
-
-def tr(key: str) -> str:
-    return translations[lang].get(key, f"⚠️ Missing translation: {key}")
+tr = LanguageManager.tr
+#query_lang = st.query_params.get("lang")
+#if isinstance(query_lang, list):
+#    query_lang = query_lang[0]
+#
+## Default
+#initial_lang = "en"
+#
+## URL has priority
+#if query_lang in ["en", "cs", "fr", "es", "de"]:
+#    initial_lang = query_lang
+#
+## If logged in already, profile may exist
+#elif st.session_state.get("user"):
+#    try:
+#        res = ensure_supabase_client().table("profiles").select(
+#            "preferred_language"
+#        ).eq("id", st.session_state.user["id"]).execute()
+#        if res.data and res.data[0].get("preferred_language"):
+#            initial_lang = res.data[0]["preferred_language"]
+#    except Exception:
+#        pass
+#
+## Initialize ONCE, before widget
+#if "lang" not in st.session_state:
+#    st.session_state.lang = initial_lang
+#
+#lang = st.session_state.lang
+#t = translations.get(lang, translations["en"])
+#
+#def tr(key: str) -> str:
+#    return translations[lang].get(key, f"⚠️ Missing translation: {key}")
 
 # --------------------------------------------------
 # LOGIN INTENT (PERSISTED)
@@ -233,6 +235,27 @@ action = action[0] if isinstance(action, list) else action
 
 #if "about_mode" not in st.session_state:
 #    st.session_state.about_mode = None
+# ==================================================
+# LANGUAGE MANAGER — Initialize from URL / Profile / Session
+# ==================================================
+
+# Load profile language if logged in
+if st.session_state.get("user"):
+    try:
+        res = ensure_supabase_client().table("profiles").select(
+            "preferred_language"
+        ).eq("id", st.session_state.user["id"]).single().execute()
+        preferred_lang = res.data.get("preferred_language") if res.data else None
+    except Exception:
+        preferred_lang = None
+else:
+    preferred_lang = None
+
+LanguageManager.init_language(profile_language=preferred_lang)
+
+# helpers
+lang = st.session_state.lang
+tr = LanguageManager.tr
 
 # ==================================================
 # AUTH UI (LOGIN / SIGNUP)
@@ -306,11 +329,12 @@ if not st.session_state.user:
 # ==================================================
 # LANGUAGE SELECTOR (WIDGET OWNS STATE)
 # ==================================================
-st.sidebar.selectbox(
-    "🌐 Language / Jazyk / Langue / Idioma / Sprache",
-    ["en", "cs", "fr", "es", "de"],
-    key="lang",
-)
+LanguageManager.sidebar_selector()
+#st.sidebar.selectbox(
+#    "🌐 Language / Jazyk / Langue / Idioma / Sprache",
+#    ["en", "cs", "fr", "es", "de"],
+#    key="lang",
+#)
 
 # ==================================================
 # PROFILES (READ cached, WRITE uncached ✅)
@@ -406,7 +430,7 @@ else:
 # ==================================================
 # PERSIST LANGUAGE CHANGES
 # ==================================================
-if user and profile.get("preferred_language") != st.session_state.lang:
+if user and profile and profile.get("preferred_language") != st.session_state.lang:
     ensure_supabase_client().table("profiles").update(
         {"preferred_language": st.session_state.lang}
     ).eq("id", user["id"]).execute()
@@ -414,11 +438,6 @@ if user and profile.get("preferred_language") != st.session_state.lang:
 # ==================================================
 # ENTITLEMENT & ROTATION
 # ==================================================
-#def compute_bucket(seed, modulo=3):
-#    h = hashlib.sha256(seed.encode()).hexdigest()
-#    return int(h, 16) % modulo
-
-#bucket = compute_bucket(user["id"] if user else anon_id)
 
 @st.cache_data(ttl=300)
 def load_visible_methods(_supabase_client, tier: str, lang: str):
@@ -572,7 +591,7 @@ for m in filtered_methods:
             if m.get("age_group"):
                 vals = safe_json_load(m["age_group"])
                 if vals:
-                    meta.append(f"**{t['level']}:** " + ", ".join(map(str, vals)))
+                    meta.append(f"**{tr("level")}:** " + ", ".join(map(str, vals)))
 
             if m.get("tags"):
                         meta.append(str(m["tags"]))
@@ -581,7 +600,7 @@ for m in filtered_methods:
                 meta.append(f"**{tr('time')}:** {m['time']}")
 
             if tools:
-                meta.append(f"**{t['materials']}:** " + ", ".join(map(str, tools)))
+                meta.append(f"**{tr("materials")}:** " + ", ".join(map(str, tools)))
 
             if meta:
                 st.info(" · ".join(meta))
@@ -589,7 +608,7 @@ for m in filtered_methods:
         # --- RIGHT: button ---
         with cols[1]:
             if st.button(
-                tr("Hide manual") if opened else f"▶ {t['open_method']}",
+                tr("Hide manual") if opened else f"▶ {tr("open_method")}",
                 key=f"btn-{m_id}"
             ):
                 if opened:
@@ -616,14 +635,14 @@ for m in filtered_methods:
                         f"{step.get('activity','')}"
                     )
 
-            render_steps(t["main_method"], content)
-            render_steps(t["before"], before)
-            render_steps(t["after"], after)
+            render_steps(tr("main_method"), content)
+            render_steps(tr("before"), before)
+            render_steps(tr("after"), after)
 
             # ---------- TOOLS ----------
             if tools:
                     st.markdown(
-                        f"**{t['materials']}:** " + ", ".join(map(str, tools))
+                        f"**{tr("materials")}:** " + ", ".join(map(str, tools))
                     )
 
             # ---------- TIPS ----------

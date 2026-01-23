@@ -1,5 +1,6 @@
 import streamlit as st
 from modules.languages import translations
+from modules.language_manager import LanguageManager
 
 st.set_page_config(page_title="About", page_icon="ℹ️", layout="wide")
 
@@ -7,32 +8,8 @@ st.set_page_config(page_title="About", page_icon="ℹ️", layout="wide")
 # LANGUAGE SELECTION WITH FLAGS
 # -------------------------------------------------------------------
 
-LANG_OPTIONS = {
-    "en": "🇬🇧 English",
-    "cs": "🇨🇿 Čeština",
-    "fr": "🇫🇷 Français",
-    "es": "🇪🇸 Español",
-    "de": "🇩🇪 Deutsch",
-}
-
-if "lang" not in st.session_state:
-    st.session_state.lang = "en"
-
-# Preselect the correct label for the current language
-current_language_label = LANG_OPTIONS[st.session_state.lang]
-
-selected_label = st.sidebar.selectbox(
-    "🌐 Language / Jazyk / Langue / Idioma / Sprache",
-    list(LANG_OPTIONS.values()),
-    index=list(LANG_OPTIONS.values()).index(current_language_label)
-)
-
-# reverse-lookup language code by label
-lang = [code for code, label in LANG_OPTIONS.items() if label == selected_label][0]
-st.session_state.lang = lang
-
-t = translations[lang]  # currently selected tanslations
-
+tr = LanguageManager.tr      # load translations
+LanguageManager.sidebar_selector()  # optional: show language menu
 
 # -------------------------------------------------------------------
 # PAGE SELECTION
@@ -42,18 +19,17 @@ page = st.sidebar.radio(
     ["🔹 About (Short)", "📘 About (Full)", "🛠️ Guide"]
 )
 
-
 # -------------------------------------------------------------------
 # PAGE ROUTER
 # -------------------------------------------------------------------
 if page == "🔹 About (Short)":
-    st.markdown(t["about_short"])
+    st.markdown(tr("about_short"))
 
 elif page == "📘 About (Full)":
-    st.markdown(t["about_full"])
+    st.markdown(tr("about_full"))
 
 elif page == "🛠️ Guide":
-    st.markdown(t["guide"])
+    st.markdown(tr("guide"))
 
 # ==================================================
 # ABOUT SECTION
