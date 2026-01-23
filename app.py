@@ -9,29 +9,46 @@ import hashlib
 from supabase import create_client, ClientOptions, Client
 from openai import OpenAI
 from modules.languages import translations
-from modules.db_operations import record_generation, can_generate_lesson, safe_json_load
+from modules.db_operations import record_generation, can_generate_lesson, can_generate_guest, safe_json_load
 from streamlit_cookies_manager import EncryptedCookieManager
 
 # ==================================================
+# CACHE DEBUG (🧪 TURN OFF IN PROD IF YOU WANT)
+# ==================================================
+CACHE_DEBUG = True
+
+def assert_not_cached_write(func_name: str):
+    """
+    Guard against accidentally caching write functions.
+    """
+    if CACHE_DEBUG and getattr(st, "_is_running_with_streamlit", False):
+        # If this function ever gets wrapped by cache, explode early
+        if hasattr(globals().get(func_name), "__wrapped__"):
+            raise RuntimeError(
+                f"❌ Cache misuse detected: `{func_name}` must NEVER be cached."
+            )
+        
+# ==================================================
 # cookies
 # ==================================================
-cookies = EncryptedCookieManager(
-    prefix="didact",
-    password=st.secrets["cookies"]["cookie_password"],  # add to secrets.toml
-)
+COOKIE_PASSWORD = st.secrets.get("cookies", {}).get("cookie_password")
+cookies = None
 
-if not cookies.ready():
-    st.stop()
+if COOKIE_PASSWORD:
+    cookies = EncryptedCookieManager(
+        prefix="didact",
+        password=COOKIE_PASSWORD,
+    )
+    if not cookies.ready():
+        st.stop()
+
 # ==================================================
 # PAGE CONFIG
 # ==================================================
 st.set_page_config(page_title="Didact-io", page_icon="🧩", layout="wide")
 
-GUEST_METHODS_VISIBLE = 5
-GUEST_AI_GENERATIONS = 1
-GUEST_AI_RATE_LIMIT_SEC = 30
-
 ALLOWED_LANGS = ["en", "cs", "fr", "es", "de"]
+
 # ==================================================
 # SUPABASE
 # ==================================================
@@ -43,11 +60,22 @@ if "anon_id" not in st.session_state:
 
 anon_id = st.session_state.anon_id
 
+def ensure_supabase_client():
+    """
+    Guarantee that st.session_state.supabase is a valid client.
+    """
+    if st.session_state.supabase is not None:
+        return st.session_state.supabase
+
+    # Fallback: guest client
+    client = get_guest_client()
+    st.session_state.supabase = client
+    return client
+
 # ==================================================
 # SUPABASE CLIENT FACTORIES
 # ==================================================
-@st.cache_resource
-def get_guest_client_cached():
+def get_guest_client():
     return create_client(
         url,
         key,
@@ -67,59 +95,83 @@ def get_user_client_cached(session):
             }
         )
     )
-# =============================================
-# Initiate sessions + Restore from cookies on re-start
-# -============================================
-if "user" not in st.session_state:
-    st.session_state.user = None
-if "session" not in st.session_state:
-    st.session_state.session = None
+
+# ==================================================
+# SESSION STATE INIT
+# ==================================================
+for k, v in {
+    "user": None,
+    "session": None,
+    "supabase": None,
+    #"about_mode": None,
+    "ai_result": None,
+    "ai_topic": None,
+}.items():
+    st.session_state.setdefault(k, v)
+
+def normalize_user(user):
+    """
+    Ensure user is always a dict with at least {id, email}.
+    """
+    if user is None:
+        return None
+
+    # Supabase User object
+    if hasattr(user, "id"):
+        return {
+            "id": user.id,
+            "email": user.email,
+        }
+
+    # Already normalized
+    if isinstance(user, dict):
+        return user
+
+    raise TypeError(f"Unsupported user type: {type(user)}")
 
 # 🔁 RESTORE SESSION FROM COOKIE
-if st.session_state.user is None and cookies.get("supabase_session"):
+if cookies and st.session_state.user is None and cookies.get("supabase_session"):
     session_data = json.loads(cookies["supabase_session"])
-    st.session_state.session = session_data
-    st.session_state.user = session_data["user"]
-    st.session_state.supabase = get_user_client_cached(
-        type("Session", (), {"access_token": session_data["access_token"]})
-    )
 
-if "ai_result" not in st.session_state:
-    st.session_state.ai_result = None
-if "ai_topic" not in st.session_state:
-    st.session_state.ai_topic = None
+    access_token = session_data.get("access_token")
+    refresh_token = session_data.get("refresh_token")
+    user_data = session_data.get("user")
+    
+    # Create a temporary client to restore session
+    client = get_guest_client()
 
-# --------------------------------------------------
-# LOGIN INTENT (PERSISTED)
-# --------------------------------------------------
-action = st.query_params.get("action")
-action = action[0] if isinstance(action, list) else action
-
-if action == "login":
-    st.session_state.force_login = True
+    try:
+        # 🔑 This refreshes the JWT if expired
+        new_session = client.auth.set_session(
+            access_token=access_token,
+            refresh_token=refresh_token,
+        )
+        st.session_state.user = normalize_user(user_data)
+        st.session_state.session = new_session
+        st.session_state.supabase = get_user_client_cached(
+            new_session.access_token
+        )
+        # 🔁 Persist refreshed tokens
+        cookies["supabase_session"] = json.dumps({
+            "access_token": new_session.access_token,
+            "refresh_token": new_session.refresh_token,
+            "user": user_data,
+        })
+        cookies.save()
+    
+    except Exception:
+        cookies.pop("supabase_session", None)
+        cookies.save()
+        st.session_state.user = None
+        st.session_state.session = None
+        st.session_state.supabase = get_guest_client()
+  
 
 # ==================================================
 # INITIAL CLIENT (guest by default)
 # ==================================================
 if "supabase" not in st.session_state:
-    st.session_state.supabase = get_guest_client_cached()
-
-supabase = st.session_state.supabase
-
-# ==================================================
-# AUTH STATE
-# ==================================================
-if "user" not in st.session_state:
-    st.session_state.user = None
-
-if "session" not in st.session_state:
-    st.session_state.session = None
-
-action = st.query_params.get("action")
-action = action[0] if isinstance(action, list) else action
-
-if "about_mode" not in st.session_state:
-    st.session_state.about_mode = None
+    st.session_state.supabase = get_guest_client()
 
 # ==================================================
 # LANGUAGE BOOTSTRAP 
@@ -138,9 +190,9 @@ if query_lang in ["en", "cs", "fr", "es", "de"]:
 # If logged in already, profile may exist
 elif st.session_state.get("user"):
     try:
-        res = supabase.table("profiles").select(
+        res = ensure_supabase_client().table("profiles").select(
             "preferred_language"
-        ).eq("id", st.session_state.user.id).execute()
+        ).eq("id", st.session_state.user["id"]).execute()
         if res.data and res.data[0].get("preferred_language"):
             initial_lang = res.data[0]["preferred_language"]
     except Exception:
@@ -155,6 +207,33 @@ t = translations.get(lang, translations["en"])
 
 def tr(key: str) -> str:
     return translations[lang].get(key, f"⚠️ Missing translation: {key}")
+
+# --------------------------------------------------
+# LOGIN INTENT (PERSISTED)
+# --------------------------------------------------
+action = st.query_params.get("action")
+action = action[0] if isinstance(action, list) else action
+
+if action == "login":
+    st.session_state.force_login = True
+
+# ==================================================
+# AUTH STATE
+# ==================================================
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+if "session" not in st.session_state:
+    st.session_state.session = None
+#
+#
+# MAYBE CAN BE REMOVED
+action = st.query_params.get("action")
+action = action[0] if isinstance(action, list) else action
+
+#if "about_mode" not in st.session_state:
+#    st.session_state.about_mode = None
+
 # ==================================================
 # AUTH UI (LOGIN / SIGNUP)
 # ==================================================
@@ -179,7 +258,7 @@ if not st.session_state.user:
         if mode == tr("signup"):
             if st.button(tr("create_account")):
                 try:
-                    res = supabase.auth.sign_up(
+                    res = ensure_supabase_client().auth.sign_up(
                         {"email": email, "password": pw}
                     )
                     if res.user:
@@ -189,24 +268,26 @@ if not st.session_state.user:
         else:
             if st.button(tr("login"), key="login_btn"):
                 try:
-                    res = supabase.auth.sign_in_with_password(
+                    res = ensure_supabase_client().auth.sign_in_with_password(
                         {"email": email, "password": pw}
                     )
                     if res.user:
-                        st.session_state.user = res.user
+                        st.session_state.user = normalize_user(res.user)
                         st.session_state.session = res.session
 
                         # 🔥 switch to user client
                         st.session_state.supabase = get_user_client_cached(res.session)
 
-                        cookies["supabase_session"] = json.dumps({
-                            "access_token": res.session.access_token,
-                            "user": {
-                                "id": res.user.id,
-                                "email": res.user.email,
-                            },
-                        })
-                        cookies.save()
+                        if cookies:
+                            cookies["supabase_session"] = json.dumps({
+                                "access_token": res.session.access_token,
+                                "refresh_token": res.session.refresh_token,
+                                "user": {
+                                    "id": res.user["id"],
+                                    "email": res.user.email,
+                                },
+                            })
+                            cookies.save()
 
                         # 🔁 post-login redirect
                         next_page = st.query_params.get("next")
@@ -230,73 +311,105 @@ st.sidebar.selectbox(
     ["en", "cs", "fr", "es", "de"],
     key="lang",
 )
-    
+
+# ==================================================
+# PROFILES (READ cached, WRITE uncached ✅)
+# ==================================================
+@st.cache_data(ttl=300)
+def load_profile(user_id):
+    res = ensure_supabase_client().table("profiles").select("*").eq(
+        "user_id", user_id
+    ).execute()
+    return res.data[0] if res.data else None
+
+def ensure_profile(user_id):
+    assert_not_cached_write("ensure_profile")
+
+    profile = load_profile(user_id)
+    if profile:
+        return profile
+
+    try:
+        ensure_supabase_client().table("profiles").insert({
+            "user_id": user_id,
+            "preferred_language": lang,
+            "plan": "free",
+        }).execute()
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to create profile for user {user_id}: {e}"
+        )
+
+    load_profile.clear()
+    profile = load_profile(user_id)
+
+    if not profile:
+        raise RuntimeError(
+            f"Profile still missing after insert for user {user_id}"
+        )
+
+    return profile
+
+
+# ==================================================
+# GUEST SESSIONS (READ cached, WRITE uncached ✅)
+# ==================================================
+@st.cache_data(ttl=300)
+def load_guest_session(anon_id):
+    res = (
+        get_guest_client()
+        .table("guest_sessions")
+        .select("*")
+        .eq("anon_id", anon_id)
+        .execute()
+    )
+    return res.data[0] if res.data else None
+
+def ensure_guest_session(anon_id):
+    assert_not_cached_write("ensure_guest_session")
+
+    guest = load_guest_session(anon_id)
+    if guest:
+        return guest
+
+    get_guest_client().table("guest_sessions").insert({
+        "anon_id": anon_id
+    }).execute()
+
+    load_guest_session.clear()
+    return load_guest_session(anon_id)
+
 # ==================================================
 # LOGGED-IN AREA
 # ==================================================
 user = st.session_state.user
 
 if user:
-    st.sidebar.badge(f"👋 {user.email}")
-
-@st.cache_data(ttl=300)
-def get_profile(user_id):
-    res = supabase.table("profiles").select("*").eq("user_id", user_id).execute()
-    if res.data:
-        return res.data[0]
-
-    supabase.table("profiles").insert(
-        {
-            "user_id": user_id,
-            "preferred_language": st.session_state.lang,
-            "plan": "free",
-        }
-    ).execute()
-
-    return {
-        "user_id": user_id,
-        "preferred_language": st.session_state.lang,
-        "plan": "free",
-    }
-
-@st.cache_data(ttl=300)
-def get_guest():
-    # 🔐 ALWAYS use guest client for guest data
-    guest_supabase = get_guest_client_cached()
-
-    res = (
-        guest_supabase
-        .table("guest_sessions")
-        .select("*")
-        .eq("anon_id", anon_id)
-        .execute()
-    )
-
-    if res.data:
-        return res.data[0]
-
-    guest_supabase.table("guest_sessions").insert({
-        "anon_id": anon_id
-    }).execute()
-
-    return {"lessons_generated": 0}
-
-if user:
-    profile = get_profile(user.id)
-    plan_name = profile.get("plan", "free")
-    guest = None
+    try:
+        profile = ensure_profile(user["id"])
+        tier = profile["plan"]
+        guest = None
+    except Exception as e:
+        # auth is broken → reset to guest safely
+        st.session_state.user = None
+        st.session_state.session = None
+        st.session_state.supabase = get_guest_client()
+        profile = None
+        guest = ensure_guest_session(anon_id)
+        tier = "guest"
+        st.warning("Session expired. Switched to guest mode.")
 else:
-    profile = None
-    plan_name = "guest"
-    guest = get_guest()
+    profile = "guest"
+    guest = ensure_guest_session(anon_id)
+    tier = "guest"
 
 # ==================================================
 # PERSIST LANGUAGE CHANGES
 # ==================================================
 if user and profile.get("preferred_language") != st.session_state.lang:
-    supabase.table("profiles").update(
+    ensure_supabase_client().table("profiles").update(
         {"preferred_language": st.session_state.lang}
-    ).eq("id", user.id).execute()
+    ).eq("id", user["id"]).execute()
 
 # ==================================================
 # ENTITLEMENT & ROTATION
@@ -305,28 +418,31 @@ if user and profile.get("preferred_language") != st.session_state.lang:
 #    h = hashlib.sha256(seed.encode()).hexdigest()
 #    return int(h, 16) % modulo
 
-tier = profile["plan"] if user else "guest"
-#bucket = compute_bucket(user.id if user else anon_id)
+#bucket = compute_bucket(user["id"] if user else anon_id)
+
 @st.cache_data(ttl=300)
-def load_visible_methods():
+def load_visible_methods(_supabase_client, tier: str, lang: str):
+    if _supabase_client is None:
+        raise RuntimeError("Supabase client is None in load_visible_methods")
+    
     today = date.today().isoformat()
 
-    res = (
-        supabase.table("method_visibility")
+    ids = [
+        r["method_id"]
+        for r in _supabase_client.table("method_visibility")
         .select("method_id")
         .eq("tier", tier)
         .lte("valid_from", today)
         .gte("valid_to", today)
         .execute()
-    )
+        .data
+    ]
 
-    ids = [r["method_id"] for r in res.data]
     if not ids:
         return []
 
-    # 1️⃣ Try selected language first
-    methods = (
-        supabase.table("methods")
+    res = (
+        _supabase_client.table("methods")
         .select("*")
         .eq("language_code", lang)
         .in_("id", ids)
@@ -334,10 +450,9 @@ def load_visible_methods():
         .data
     )
 
-    # 2️⃣ Fallback to English if none found
-    if not methods and lang != "en":
-        methods = (
-            supabase.table("methods")
+    if not res and lang != "en":
+        res = (
+            _supabase_client.table("methods")
             .select("*")
             .eq("language_code", "en")
             .in_("id", ids)
@@ -345,12 +460,22 @@ def load_visible_methods():
             .data
         )
 
-    return methods
+    # parse JSON once
+    for m in res:
+        m["_parsed"] = {
+            "before": safe_json_load(m.get("before")),
+            "after": safe_json_load(m.get("after")),
+            "content": safe_json_load(m.get("content_md")),
+            "tools": safe_json_load(m.get("tools")),
+        }
 
-methods = load_visible_methods()
+    return res
+
+supabase_client = ensure_supabase_client()
+methods = load_visible_methods(supabase_client, tier, lang)
 
 # ==================================================
-# UI HEADER
+# UI LOGOUT
 # ==================================================
 if user:
     #st.success(f"{tr('welcome')} {user.email}")
@@ -358,34 +483,13 @@ if user:
     def logout():
         st.session_state.user = None
         st.session_state.session = None
-        st.session_state.supabase = get_guest_client_cached()
+        st.session_state.supabase = get_guest_client()
         cookies.pop("supabase_session", None)
         cookies.save()
         st.query_params.clear()
         st.rerun()
 
     st.sidebar.button(tr("logout"), on_click=logout)
-
-if not user:
-    st.error(
-        f"👋 Guest mode: {GUEST_METHODS_VISIBLE} methods visible - {GUEST_AI_GENERATIONS} AI adaptations\n"
-        f"- Create a free account to unlock more."
-    )
-
-# ==================================================
-# LOAD PLAN
-# ==================================================
-if user:
-    plan = (
-        supabase.table("plans")
-        .select("*")
-        .eq("name", plan_name)
-        .single()
-        .execute()
-        .data
-    )
-else:
-    plan = None
 
 # ==================================================
 # UI Header
@@ -396,58 +500,41 @@ if not user:
     st.error(tr("log_to_use"))
 
 # ==================================================
-# ABOUT SECTION
-# ==================================================
-def toggle_about(mode):
-    st.session_state.about_mode = (
-        None if st.session_state.about_mode == mode else mode
-    )
-    
-cols = st.columns(2)
-
-with cols[0]:
-    if st.button(tr("about_short_btn")):
-        toggle_about("short")
-
-with cols[1]:
-    if st.button(tr("about_full_btn")):
-        toggle_about("full")
-
-if st.session_state.about_mode == "short":
-    st.info(tr("about_short"))
-
-elif st.session_state.about_mode == "full":
-    st.info(tr("about_full"))
-
-# ==================================================
 #METHODS PAGE RENDERING (possibly move first part - titles - to UI Header)
 # ==================================================
 st.title(tr("title"))
 st.write(tr("subtitle"))
 
-#######
-visible = (
-    methods[:GUEST_METHODS_VISIBLE]
-    if not user else methods
-)
-#######
-
 if user:
-    quotas = plan
-    number_of_methods_to_show = quotas.get("weekly_method_quota")
+    plan_name = profile["plan"]
 else:
-    number_of_methods_to_show = GUEST_METHODS_VISIBLE
-# --- Filter methods by selected language  ---
-#filtered_methods = [m for m in visible if method_lang(m.get("id", "")) == lang]
-#filtered_methods = filtered_methods[:number_of_methods_to_show]
-filtered_methods = visible[:number_of_methods_to_show]
+    plan_name = "guest"
+
+plan = (
+        ensure_supabase_client().table("plans")
+        .select("*")
+        .eq("name", plan_name)
+        .single()
+        .execute()
+        .data
+    )
+number_of_methods_to_show = plan["weekly_method_quota"]
+
+if not user:
+    st.sidebar.error(
+        f"👋 Guest daily quotas: {number_of_methods_to_show} methods visible - 3 AI adaptations\n"
+        f"- Create a free account to unlock more."
+    )
+
+filtered_methods = methods[:number_of_methods_to_show]
 method_names = [m["name"] for m in filtered_methods if "id" in m]
+
 method_qs = st.query_params.get("method", None)
 method_qs = method_qs[0] if isinstance(method_qs, list) else method_qs
 
 # Auto-collapse About when a method is opened
-if method_qs:
-    st.session_state.about_mode = None
+#if method_qs:
+#    st.session_state.about_mode = None
 # --------------------------------------------------            
 # --- Render ---
 # --------------------------------------------------
@@ -459,21 +546,28 @@ for m in filtered_methods:
     # Get translated fields with fallback
     name = m.get(f"name_{lang}") or m.get("name") or tr("unnamed_method")
     description = m.get(f"description{lang}") or m.get("description")
+    tips = m.get(f"tips_{lang}") or m.get("tips")
 
     before = safe_json_load(m["before"])
     after = safe_json_load(m["after"])
     content = safe_json_load(m["content_md"])
     
-    tips = m.get(f"tips_{lang}") or m.get("tips")
+    # ---- Parsed JSON (single source of truth) ----
+    parsed = m.get("_parsed", {})
+    before = parsed.get("before") or []
+    after = parsed.get("after") or []
+    content = parsed.get("content") or []
+    tools = parsed.get("tools") or []
 
     with st.container(border=True):
         cols = st.columns([0.7, 0.3])
+
+        # ================= LEFT =================
         with cols[0]:
             st.subheader(name)
             if description:
                 st.write(description)
         
-
             meta = []
             if m.get("age_group"):
                 vals = safe_json_load(m["age_group"])
@@ -486,10 +580,8 @@ for m in filtered_methods:
             if m.get("time"):
                 meta.append(f"**{tr('time')}:** {m['time']}")
 
-            if m.get("tools"):
-                mats = safe_json_load(m["tools"])
-                if mats:
-                    meta.append(f"**{t['materials']}:** " + ", ".join(map(str, mats)))
+            if tools:
+                meta.append(f"**{t['materials']}:** " + ", ".join(map(str, tools)))
 
             if meta:
                 st.info(" · ".join(meta))
@@ -509,48 +601,36 @@ for m in filtered_methods:
                 
         if opened:
             # ---------- MAIN CONTENT ----------
-            if content:
-                st.markdown(f"##### {t['main_method']}")
-                for step in sorted(content, key=lambda x: x.get("order", 0)):
-                    title = step.get("title", "")
-                    activity = step.get("activity", "")
-                    minutes = step.get("minutes")
-                    mins = f" — {minutes} min" if minutes else ""
-                    st.markdown(f"- **{title}**{mins}  \n  {activity}")
-            
-            # ---------- BEFORE ----------
-            if before:
-                st.markdown(f"##### {t['before']}")
-                for step in sorted(before, key=lambda x: x.get("order", 0)):
-                    title = step.get("title", "")
-                    activity = step.get("activity", "")
-                    minutes = step.get("minutes")
-                    mins = f" — {minutes} min" if minutes else ""
-                    st.markdown(f"- **{title}**{mins}  \n  {activity}")
-            
-            # ---------- AFTER ----------
-            if after:
-                st.markdown(f"##### {t['after']}")
-                for step in sorted(after, key=lambda x: x.get("order", 0)):
-                    title = step.get("title", "")
-                    activity = step.get("activity", "")
-                    minutes = step.get("minutes")
-                    mins = f" — {minutes} min" if minutes else ""
-                    st.markdown(f"- **{title}**{mins}  \n  {activity}")
+            def render_steps(title, steps):
+                if not steps:
+                    return
+                st.markdown(f"##### {title}")
+                for step in sorted(steps, key=lambda x: x.get("order", 0)):
+                    mins = (
+                        f" — {step['minutes']} min"
+                        if step.get("minutes")
+                        else ""
+                    )
+                    st.markdown(
+                        f"- **{step.get('title','')}**{mins}  \n"
+                        f"{step.get('activity','')}"
+                    )
+
+            render_steps(t["main_method"], content)
+            render_steps(t["before"], before)
+            render_steps(t["after"], after)
 
             # ---------- TOOLS ----------
-            if m.get("tools"):
-                mats = safe_json_load(m["tools"])
-                if mats:
+            if tools:
                     st.markdown(
-                        f"**{t['materials']}:** " + ", ".join(map(str, mats))
+                        f"**{t['materials']}:** " + ", ".join(map(str, tools))
                     )
 
             # ---------- TIPS ----------
             if tips:
-                tips = json.loads(tips) if isinstance(tips, str) else tips
+                tips_list = json.loads(tips) if isinstance(tips, str) else tips
                 st.markdown(f"**{tr('tips')}**")
-                for tip in tips:
+                for tip in tips_list:
                     st.markdown(f"- {tip}")
 
             # ---------- VIDEO ----------
@@ -558,11 +638,8 @@ for m in filtered_methods:
             #    st.video(m["videoUrl"])
 
 # ==================================================
-# AI GENERATION (UNCHANGED)
+# AI GENERATION
 # ==================================================
-
-st.markdown("---")
-st.subheader(f"✨ {tr('generate_AI_subheader')}")
 
 def rate_limit(key, seconds):
     now = time.time()
@@ -572,17 +649,32 @@ def rate_limit(key, seconds):
     st.session_state[key] = now
     return True
 
+st.markdown("---")
+st.subheader(f"✨ {tr('generate_AI_subheader')}")
+
 # can_generate=function in db_operations.py, 
 # it compares quotas from profile table with used-up
-if user:
-    plan = supabase.table("plans").select("*").eq(
+if user: 
+    plan = ensure_supabase_client().table("plans").select("*").eq(
         "name", profile["plan"]
     ).single().execute().data
     can_generate, msg = can_generate_lesson(profile, plan)
 else:
-    can_generate = guest["lessons_generated"] < GUEST_AI_GENERATIONS
-    msg = tr("guest_limit_reached")
+    guest = ensure_guest_session(anon_id)
+    can_generate, msg = can_generate_guest(guest)
 
+    # persist resets (only if periods changed)
+    ensure_supabase_client().table("guest_sessions").update({
+    "ai_used_week": guest["ai_used_week"],
+    "ai_used_month": guest["ai_used_month"],
+    "week_start": guest["week_start"].isoformat() if guest["week_start"] else None,
+    "month_start": guest["month_start"].isoformat() if guest["month_start"] else None,
+}).eq("anon_id", anon_id).execute()
+
+    if msg:
+        msg = tr("guest_limit_reached")
+        st.error(msg)
+        st.stop()
 topic = st.text_input(tr("enter_topic"))    
 
 method_options = {m["name"]: m["id"] for m in filtered_methods}
@@ -601,37 +693,38 @@ selected_methods = [method_options[name] for name in selected_names]
 
 methods_steps = []
 
-for method_id in selected_methods:
-    # Find the method dict that matches the selected ID
-    method_data = next((m for m in filtered_methods if m["id"] == method_id), None)
-
-    if not method_data:
-        continue
-
-    # Load the content_md JSON (list of steps)
-    content = safe_json_load(method_data.get("content_md"))
-
-    # Convert the list of step dicts to readable strings
-    if isinstance(content, list):
-        content_sorted = sorted(
-            content, key=lambda s: s.get("order", 0)
-        )
-        steps_text = "\n".join(
-            f"{s.get('order', i+1)}. {s.get('title', '')}: {s.get('activity', '')}"
-            for i, s in enumerate(content_sorted)
-            if isinstance(s, dict)
-        )
-    else:
-        steps_text = str(content)
-
-    # Append a formatted version for later use in the prompt
-    methods_steps.append(f"{method_data.get('name', method_names)} — {steps_text}")
-
 if selected_names:
+    for method_id in selected_methods:
+        # Find the method dict that matches the selected ID
+        method_data = next((m for m in filtered_methods if m["id"] == method_id), None)
+
+        if not method_data:
+            continue
+
+        # Load the content_md JSON (list of steps)
+        content = safe_json_load(method_data.get("content_md"))
+
+        # Convert the list of step dicts to readable strings
+        if isinstance(content, list):
+            content_sorted = sorted(
+                content, key=lambda s: s.get("order", 0)
+            )
+            steps_text = "\n".join(
+                f"{s.get('order', i+1)}. {s.get('title', '')}: {s.get('activity', '')}"
+                for i, s in enumerate(content_sorted)
+                if isinstance(s, dict)
+            )
+        else:
+            steps_text = str(content)
+
+        # Append a formatted version for later use in the prompt
+        methods_steps.append(f"{method_data.get('name', method_names)} — {steps_text}")
+
+
     # Optional: preview in Streamlit
-    st.markdown(f"### 🧩 {tr('selected_methods')}")
-    for ms in selected_methods:
-        st.markdown(f"- {ms}")
+    #st.markdown(f"### 🧩 {tr('selected_methods')}")
+    #for ms in selected_methods:
+    #    st.markdown(f"- {ms}")
 
     if st.button(tr("generate_button")):
         if not topic:
@@ -639,7 +732,7 @@ if selected_names:
         elif not can_generate:
             st.error(tr("cannot_generate_now"))
             st.stop()
-        elif not rate_limit("ai_rate", GUEST_AI_RATE_LIMIT_SEC):
+        elif not rate_limit("ai_rate", 30):
             st.warning(tr("slow_down"))
             st.stop()
 
@@ -673,19 +766,22 @@ if selected_names:
                     resp = client.chat.completions.create(
                         model=MODEL,
                         messages=[{"role": "user", "content": prompt}],
-                        max_tokens=350,
+                        max_tokens=450,
                     )
                     st.session_state.ai_result = resp.choices[0].message.content
                     st.session_state.ai_topic = topic
 
                     if user:
                         profile = record_generation(profile)
-                        supabase.table("profiles").update(profile).eq(
-                            "id", user.id
+                        ensure_supabase_client().table("profiles").update(profile).eq(
+                            "id", user["id"]
                         ).execute()
                     else:
-                        supabase.table("guest_sessions").update({
-                            "lessons_generated": guest["lessons_generated"] + 1
+                        ensure_supabase_client().table("guest_sessions").update({
+                            "lessons_generated": guest["lessons_generated"] + 1,
+                            "ai_used_week": guest["ai_used_week"] + 1,
+                            "ai_used_month": guest["ai_used_month"] + 1,
+                            "last_generated_at": "now()"
                         }).eq("anon_id", anon_id).execute()
 
                 except Exception as e:

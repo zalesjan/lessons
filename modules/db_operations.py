@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 import json
 
 #def generate_lesson_plan(filters, subject_categories):
@@ -46,7 +46,6 @@ import json
 
 #
 #
-from datetime import date, datetime
 
 def reset_quotas_if_needed(profile):
     today = date.today()
@@ -86,6 +85,7 @@ def reset_quotas_if_needed(profile):
     profile.update(updated_fields)
     return profile
 
+
 def can_generate_lesson(profile, plan):
 
     profile = reset_quotas_if_needed(profile)
@@ -117,6 +117,35 @@ def can_generate_lesson(profile, plan):
         return False, "Total quota exceeded"
 
     return True, ""
+
+
+def can_generate_guest(guest):
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())
+    month_start = today.replace(day=1)
+
+    # reset week
+    if guest["week_start"] != week_start:
+        guest["ai_used_week"] = 0
+        guest["week_start"] = week_start
+
+    # reset month
+    if guest["month_start"] != month_start:
+        guest["ai_used_month"] = 0
+        guest["month_start"] = month_start
+
+    DAY_LIMIT = 3
+    WEEK_LIMIT = 6
+    MONTH_LIMIT = 9
+
+ #   if guest["lessons_generated"] >= DAY_LIMIT:
+ #       return False, True
+    if guest["ai_used_week"] >= WEEK_LIMIT:
+        return False, True
+    if guest["ai_used_month"] >= MONTH_LIMIT:
+        return False, True
+
+    return True, None
 
 #
 #def how_many_methods(profile, plan, ):
