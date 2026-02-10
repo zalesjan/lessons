@@ -55,13 +55,12 @@ def reset_quotas_if_needed(profile):
     last_daily = profile.get("last_quota_reset_daily")
     if not last_daily or last_daily != today:
         updated_fields["lessons_used_daily"] = 0
-        updated_fields["last_quota_reset_daily"] = today
-
+        updated_fields["last_quota_reset_daily"] = today 
     # --- WEEKLY ---
-    current_week = today.isocalendar()[1]
+    current_week = today
     last_week = None
     if profile.get("last_quota_reset_weekly"):
-        last_week = profile["last_quota_reset_weekly"].isocalendar()[1]
+        last_week = profile["last_quota_reset_weekly"]
 
     if not last_week or last_week != current_week:
         updated_fields["lessons_used_weekly"] = 0
@@ -71,7 +70,7 @@ def reset_quotas_if_needed(profile):
     current_month = today.month
     last_month = None
     if profile.get("last_quota_reset_monthly"):
-        last_month = profile["last_quota_reset_monthly"].month
+        last_month = profile["last_quota_reset_monthly"]
 
     if not last_month or last_month != current_month:
         updated_fields["lessons_used_monthly"] = 0
@@ -80,9 +79,15 @@ def reset_quotas_if_needed(profile):
     # If nothing changed, return the original
     if not updated_fields:
         return profile
+    
+    for k, v in profile.items():
+        if isinstance(v, date):
+            profile[k] = v.isoformat()
 
     # Merge changes into profile dict
     profile.update(updated_fields)
+
+
     return profile
 
 
@@ -140,6 +145,8 @@ def can_generate_guest(guest):
 
  #   if guest["lessons_generated"] >= DAY_LIMIT:
  #       return False, True
+    if guest["lessons_generated"] >= DAY_LIMIT:
+        return False, True
     if guest["ai_used_week"] >= WEEK_LIMIT:
         return False, True
     if guest["ai_used_month"] >= MONTH_LIMIT:
@@ -147,23 +154,69 @@ def can_generate_guest(guest):
 
     return True, None
 
-#
-#def how_many_methods(profile, plan, ):
-#    if profile == None:
-#        number_of_methods_to_show = plan.get("weekly_method_quota")
-#    elif profile.get("plan") == "free":
-#        number_of_methods_to_show = free_plan_number_of_methods_to_show
-#    return number_of_methods_to_show
-#
-def record_generation(profile):
-    profile["lessons_used_daily"]   = profile.get("lessons_used_daily", 0) + 1
-    profile["lessons_used_weekly"]  = profile.get("lessons_used_weekly", 0) + 1
-    profile["lessons_used_monthly"] = profile.get("lessons_used_monthly", 0) + 1
-    profile["lessons_used_total"]   = profile.get("lessons_used_total", 0) + 1
+def record_generation(profile: dict) -> dict:
+    """
+    Increment AI generation counters on a user profile.
+    Ensures safe defaults, period resets (day/week/month),
+    and stores ISO-formatted dates safe for JSON serialization.
+    """
 
-    profile["last_generation_date"] = date.today()
+    # ✅ Always use today's local date instance
+    _today = date.today() if callable(getattr(date, "today", None)) else date
+    if callable(_today):
+        _today = _today()
+    iso_today = _today.isoformat()
 
+    # Safely read last recorded generation date (if any)
+    last_gen_str = profile.get("last_generation_date")
+    try:
+        last_gen = date.fromisoformat(last_gen_str) if last_gen_str else None
+    except Exception:
+        last_gen = None
+
+    # Determine current week/month boundaries
+    monday = _today - timedelta(days=_today.weekday())
+    current_week_start = monday.isoformat()
+    current_month_start = _today.replace(day=1).isoformat()
+
+    # Read stored week/month boundaries, fall back to current
+    last_week_start = profile.get("week_start") or current_week_start
+    last_month_start = profile.get("month_start") or current_month_start
+
+    # ---------- Period resets ----------
+    # Reset daily when a new day starts
+    if last_gen and last_gen != _today:
+        profile["lessons_used_daily"] = 0
+
+    if last_week_start != current_week_start:
+        profile["lessons_used_weekly"] = 0
+        profile["week_start"] = current_week_start
+
+    if last_month_start != current_month_start:
+        profile["lessons_used_monthly"] = 0
+        profile["month_start"] = current_month_start
+
+    # ---------- Increment counters ----------
+    profile["lessons_used_daily"] = (profile.get("lessons_used_daily") or 0) + 1
+    profile["lessons_used_weekly"] = (profile.get("lessons_used_weekly") or 0) + 1
+    profile["lessons_used_monthly"] = (profile.get("lessons_used_monthly") or 0) + 1
+    profile["lessons_used_total"] = (profile.get("lessons_used_total") or 0) + 1
+
+        # ---------- Update date metadata ----------
+    profile["last_generation_date"] = iso_today
+    profile["last_quota_reset_daily"] = current_week_start  # store as string
+    profile["last_quota_reset_weekly"] = current_week_start
+    profile["last_quota_reset_monthly"] = current_month_start
+    profile["last_generated_at"] = "now()"
+   
+ # ---------- Ensure all date objects are serialized ----------
+    for k, v in profile.items():
+        if isinstance(v, date):
+            profile[k] = v.isoformat()
+            
     return profile
+
+
 
 
 def method_lang(id_value):

@@ -2,13 +2,19 @@ import streamlit as st
 import requests
 from modules.languages import translations
 from modules.supabase_client import get_guest_client
-
+from modules.supabase_client import get_user_client
 
 # ==================================================
-# STATE
+# STATE + CONFIG
 # ==================================================
 if "selected_interval" not in st.session_state:
     st.session_state.selected_interval = None
+
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+if "session" not in st.session_state:
+    st.session_state.session = None
 
 st.set_page_config(page_title="Billing", page_icon="💳")
 
@@ -25,7 +31,7 @@ def tr(key: str) -> str:
 # --------------------------------------------------
 st.title(tr("billing_title"))
 st.markdown(tr("billing_intro"))
-st.title("💳 Upgrade to Didact.io Pro plan")
+#st.title("💳 Upgrade to Didact.io Pro plan")
 st.badge(
     """
     Upgrade your **Didact.io** account to unlock deeper access to effective
@@ -36,7 +42,7 @@ st.badge(
 # --------------------------------------------------
 # Safety checks
 # --------------------------------------------------
-if not st.session_state.user:
+if not st.session_state.user or not st.session_state.session:
 
     st.info(
         "🔐 **" + tr("billing_login_required_title") + "**\n\n"
@@ -54,9 +60,26 @@ if not st.session_state.user:
 
         st.stop()
 
-if "supabase" not in st.session_state:
-    st.error("Supabase client not initialized.")
-    st.stop()
+# --------------------------------------------------
+# Load user profile (REQUIRED for billing)
+# --------------------------------------------------
+if st.session_state.user:
+    user_supabase = get_user_client(st.session_state.session)
+
+    profile_res = (
+        user_supabase
+        .table("profiles")
+        .select("*")
+        .eq("user_id", st.session_state.user.id)
+        .single()
+        .execute()
+    )
+
+    profile = profile_res.data
+
+    if not profile:
+        st.error("User profile not initialized. Please reload the app.")
+        st.stop()
 
 # --------------------------------------------------
 # Load plans from Supabase
@@ -85,14 +108,6 @@ def render_limit(value):
             "style='cursor:help;font-size:1.1rem'>∞</span>"
         )
     return f"<span>{value}</span>"
-
-# ==================================================
-# LOAD PLANS
-# ==================================================
-#plans = sorted(plans, key=lambda p: p.get("position", 0))
-
-# Current user plan (VERY IMPORTANT)
-#current_plan = st.session_state.user.user_metadata.get("plan")
 
 # ==================================================
 # FEATURE MATRIX (THIS FIXES YOUR ISSUE)
@@ -233,68 +248,16 @@ if st.session_state.user:
                 use_container_width=True,
             ):
                 st.session_state.selected_interval = plan["name"]
-
-
-
-
-# --------------------------------------------------
-# Plan selection UI
-# --------------------------------------------------
-#st.subheader(tr("billing_choose_plan"))
-#
-#cols = st.columns(len(plans))
-#selected_interval = st.session_state.selected_interval
-#
-#for col, plan in zip(cols, plans):
-#    with col:
-#        if plan.get("is_recommended"):
-#            st.markdown("⭐ **" + tr("billing_recommended") + "**")
-#        if plan.get("name") == "none":
-#            st.markdown(f"### {plan['name']}")
-#            st.markdown(f"**{plan['price']}**")
-#            
-#        if plan.get("daily_lesson_quota"):
-#            if plan.get("name") == "none":
-#                st.markdown(tr("billing_intro"))
-#            else :st.markdown(
-#                tr("billing_ai_limit").format(
-#                    ai_generations=plan["daily_lesson_quota"]
-#                )
-#            )
-#                
-#        if plan.get("weekly_lesson_quota"):
-#            if plan.get("name") == "none":
-#                st.markdown(tr("billing_intro"))
-#            else: st.markdown(
-#                tr("billing_ai_limit").format(
-#                    ai_generations=plan["weekly_lesson_quota"]
-#                )
-#            )
-#                
-#        if plan.get("month_lesson_quota"):
-#            if plan.get("name") == "none":
-#                st.markdown(tr("billing_intro"))
-#            else: st.markdown(
-#                tr("billing_ai_limit").format(
-#                    ai_generations=plan["monthly_lesson_quota"]
-#                )
-#            )
-#
-#        else:
-#            st.markdown(tr("billing_ai_unlimited"))
-#        
-#        if st.session_state.user:
-#            if st.button(
-#                tr("billing_select_plan").format(label=plan["name"]),
-#                key=f"select_{plan['name']}",
-#            ):
-#                st.session_state.selected_interval = plan["name"]
-#        else: st.error(tr("log_to_use"))
+else:
+    st.error(
+        "🔐 **" + tr("billing_login_required_title") + "**\n\n"
+        + tr("billing_login_required_text")
+    )
 
 # --------------------------------------------------
 # Require selection
 # --------------------------------------------------
-if not selected_interval:
+if not selected_interval and st.session_state.user:
     st.info(tr("billing_select_prompt"))
     st.stop()
 
@@ -309,14 +272,41 @@ st.markdown(tr("billing_conditions_text"))
 # --------------------------------------------------
 # Checkout
 # --------------------------------------------------
-if st.button(tr("billing_checkout"), use_container_width=True):
-    with st.spinner(tr("billing_redirecting")):
+if st.session_state.user:
+    if st.button(tr("billing_checkout"), use_container_width=True):
+        with st.spinner(tr("billing_redirecting")):
+            res = requests.post(
+                f"{st.secrets['supabase']['functions_url']}/create-checkout",
+                json={
+                    "interval": selected_interval,
+                    "user_id": st.session_state.user.id,
+                    "email": st.session_state.user.email,
+                },
+                headers={
+                    "Authorization": f"Bearer {st.session_state.session.access_token}"
+                },
+                timeout=15,
+            )
+
+        #if res.status_code != 200:
+        #    st.error(tr("billing_checkout_failed"))
+        #    st.stop()
+
+        if res.status_code != 200:
+            st.error("Failed to create checkout session.")
+            st.write("Status code:", res.status_code)
+            st.write("Response text:", res.text)
+            st.stop()
+
+        checkout_url = res.json()["url"]
+        st.markdown(f"👉 [{tr('billing_proceed_payment')}]({checkout_url})")
+
+if st.session_state.user and profile.get("stripe_customer_id"):
+    if st.button("🧾 Manage subscription"):
         res = requests.post(
-            f"{st.secrets['supabase']['functions_url']}/create-checkout",
+            f"{st.secrets['supabase']['functions_url']}/create-portal-session",
             json={
-                "interval": selected_interval,
-                "user_id": st.session_state.user.id,
-                "email": st.session_state.user.email,
+                "customer_id": profile["stripe_customer_id"]
             },
             headers={
                 "Authorization": f"Bearer {st.session_state.session.access_token}"
@@ -324,15 +314,8 @@ if st.button(tr("billing_checkout"), use_container_width=True):
             timeout=15,
         )
 
-    #if res.status_code != 200:
-    #    st.error(tr("billing_checkout_failed"))
-    #    st.stop()
-
-    if res.status_code != 200:
-        st.error("Failed to create checkout session.")
-        st.write("Status code:", res.status_code)
-        st.write("Response text:", res.text)
-        st.stop()
-
-    checkout_url = res.json()["url"]
-    st.markdown(f"👉 [{tr('billing_proceed_payment')}]({checkout_url})")
+        if res.status_code != 200:
+            st.error("Failed to open billing portal.")
+        else:
+            portal_url = res.json()["url"]
+            st.markdown(f"👉 [Open billing portal]({portal_url})")

@@ -331,7 +331,7 @@ Brzy budete moci stavět celé lekce a kombinovat předpřipravené bloky.
 ,
         # Main screen
 
-        "adapt_with_ai_login_title1": "Najdi si super didaktickou metodu y nabídky", 
+        "adapt_with_ai_login_title1": "Najdi si super didaktickou metodu z nabídky", 
         "adapt_with_ai_login_title": "Chceš-li, adaptuj ji na své téma pomocí AI!",
         "log_to_use": " Přihlaš se a získej přístup k více metodám a AI adaptacím.",
         "title": "Didact-io = Didaktické metody ihned",

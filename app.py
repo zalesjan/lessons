@@ -1,21 +1,21 @@
-# pages/1_Methods.py
 import streamlit as st
 import json
 import os
 import uuid
-from datetime import date
+from datetime import date, timedelta
 import time
 import hashlib
-from supabase import create_client, ClientOptions, Client
 from openai import OpenAI
 from modules.languages import translations
 from modules.db_operations import record_generation, can_generate_lesson, can_generate_guest, safe_json_load
 from modules.language_manager import LanguageManager
 from streamlit_cookies_manager import EncryptedCookieManager
 
+
 # ==================================================
 # CACHE DEBUG (🧪 TURN OFF IN PROD IF YOU WANT)
 # ==================================================
+
 CACHE_DEBUG = True
 
 def assert_not_cached_write(func_name: str):
@@ -30,85 +30,41 @@ def assert_not_cached_write(func_name: str):
             )
         
 # ==================================================
-# cookies
-# ==================================================
-COOKIE_PASSWORD = st.secrets.get("cookies", {}).get("cookie_password")
-cookies = None
-
-if COOKIE_PASSWORD:
-    cookies = EncryptedCookieManager(
-        prefix="didact",
-        password=COOKIE_PASSWORD,
-    )
-    if not cookies.ready():
-        st.stop()
-
-# ==================================================
-# PAGE CONFIG
-# ==================================================
-st.set_page_config(page_title="Didact-io", page_icon="🧩", layout="wide")
-
-#ALLOWED_LANGS = ["en", "cs", "fr", "es", "de"]
-
-# ==================================================
 # SUPABASE
 # ==================================================
+from supabase import create_client, ClientOptions, Client
+
 url = st.secrets["supabase"]["url"]
 key = st.secrets["supabase"]["key"]
-
-if "anon_id" not in st.session_state:
-    st.session_state.anon_id = str(uuid.uuid4())
-
-anon_id = st.session_state.anon_id
-
-def ensure_supabase_client():
-    """
-    Guarantee that st.session_state.supabase is a valid client.
-    """
-    if st.session_state.supabase is not None:
-        return st.session_state.supabase
-
-    # Fallback: guest client
-    client = get_guest_client()
-    st.session_state.supabase = client
-    return client
-
-# ==================================================
-# SUPABASE CLIENT FACTORIES
-# ==================================================
-def get_guest_client():
-    return create_client(
-        url,
-        key,
-        options=ClientOptions(
-            headers={"x-anon-id": anon_id}
-        )
-    )
-
-@st.cache_resource
-def get_user_client_cached(session):
-    return create_client(
-        url,
-        key,
-        options=ClientOptions(
-            headers={
-                "Authorization": f"Bearer {session.access_token}"
-            }
-        )
-    )
 
 # ==================================================
 # SESSION STATE INIT
 # ==================================================
 for k, v in {
-    "user": None,
-    "session": None,
-    "supabase": None,
-    #"about_mode": None,
     "ai_result": None,
     "ai_topic": None,
 }.items():
     st.session_state.setdefault(k, v)
+    
+#  ==================================================
+# PAGE CONFIG
+# ==================================================
+st.write("🔍 RUN START")
+st.write("user:", st.session_state.get("user"))
+st.write("session:", bool(st.session_state.get("session")))
+st.write("auth_state:", st.session_state.get("auth_state"))
+
+st.set_page_config(page_title="Didact-io", page_icon="🧩", layout="wide")
+
+# ==================================================
+# SESSION RESTORE - COOKIES
+# ==================================================
+def is_authenticated():
+    return (
+        isinstance(st.session_state.get("user"), dict)
+        and "id" in st.session_state.user
+        and st.session_state.get("session") is not None
+    )
 
 def normalize_user(user):
     """
@@ -130,85 +86,226 @@ def normalize_user(user):
 
     raise TypeError(f"Unsupported user type: {type(user)}")
 
-# 🔁 RESTORE SESSION FROM COOKIE
-if cookies and st.session_state.user is None and cookies.get("supabase_session"):
-    session_data = json.loads(cookies["supabase_session"])
-
-    access_token = session_data.get("access_token")
-    refresh_token = session_data.get("refresh_token")
-    user_data = session_data.get("user")
-    
-    # Create a temporary client to restore session
-    client = get_guest_client()
+def restore_user_from_cookie() -> bool:
+    if cookies is None:
+        return False
 
     try:
-        # 🔑 This refreshes the JWT if expired
-        new_session = client.auth.set_session(
-            access_token=access_token,
-            refresh_token=refresh_token,
-        )
-        st.session_state.user = normalize_user(user_data)
-        st.session_state.session = new_session
-        st.session_state.supabase = get_user_client_cached(
-            new_session.access_token
-        )
-        # 🔁 Persist refreshed tokens
-        cookies["supabase_session"] = json.dumps({
-            "access_token": new_session.access_token,
-            "refresh_token": new_session.refresh_token,
-            "user": user_data,
+        raw = cookies["didact_supabase_session"]
+        data = json.loads(raw)
+
+        access_token = data.get("access_token")
+        refresh_token = data.get("refresh_token")
+
+        if not access_token or not refresh_token:
+            return False
+
+        client = create_client(url, key)
+        client.auth.set_session(access_token, refresh_token)
+
+        session = client.auth.get_session()
+        if not session or not session.user:
+            return False
+
+        # ✅ SINGLE SOURCE OF TRUTH
+        st.session_state.session = session
+        st.session_state.user = {
+            "id": session.user.id,
+            "email": session.user.email,
+        }
+        st.session_state.supabase = client
+
+        # persist refreshed tokens ONLY
+        cookies["didact_supabase_session"] = json.dumps({
+            "access_token": session.access_token,
+            "refresh_token": session.refresh_token,
         })
         cookies.save()
+
+        return True
+
+    except Exception as e:
+        st.error(f"RESTORE FAILED: {e}")
+        return False
+
+        #st.warning(f"⚠️ Session restore failed: {e}")
+        #cookies.save()
+        #st.session_state.user = None
+        #st.session_state.session = None
+        #st.session_state.supabase = get_guest_client()
+        #return None
+
+COOKIE_PASSWORD = st.secrets.get("cookies", {}).get("cookie_password")
+cookies = None
+
+if COOKIE_PASSWORD:
+    cookies = EncryptedCookieManager(
+        prefix="didact",
+        password=COOKIE_PASSWORD,
+    )
+
+if cookies is not None and not cookies.ready():
+    st.info("🔄 Initializing session…")
+    st.stop()
+
+# ==================================================
+# AUTH BOOTSTRAP BARRIER
+# ==================================================
+
+if "auth_state" not in st.session_state:
+    st.session_state.auth_state = "init"   # init | ready
+
+if st.session_state.auth_state == "init":
+
+    # 1️⃣ If session already exists (warm rerun, login, etc.)
+    if st.session_state.get("session") and st.session_state.get("user"):
+        st.session_state.auth_state = "ready"
+
+    else:
+        # 2️⃣ Cold start → try cookie restore
+        restored = False
+        if cookies and cookies.ready():
+            restored = restore_user_from_cookie()
+
+        st.session_state.auth_state = "ready"
+
+        if restored:
+            st.rerun()
+
+
+# ==================================================
+# STABLE ANON ID MANAGEMENT (persistent via URL)
+# ==================================================
+def get_or_create_anon_id():
+    """Ensure a persistent anon_id stored in URL and session_state."""
+    query_params = st.query_params
+    anon_id = query_params.get("anon_id")
+
+    if isinstance(anon_id, list):
+        anon_id = anon_id[0]
+
+    # If missing, generate new anon_id and update URL
+    if not anon_id:
+        anon_id = str(uuid.uuid4())
+        query_params["anon_id"] = anon_id
+        st.query_params.update(query_params)
+
+    # Sync to session_state
+    st.session_state.anon_id = anon_id
+    return anon_id
+
+anon_id = get_or_create_anon_id()
+
+# ==================================================
+# SUPABASE CLIENT FACTORIES
+# ==================================================
+def get_guest_client():
+    """Create a Supabase client for non-authenticated guests."""
+    return create_client(
+        url,
+        key,
+        options=ClientOptions(
+            headers={"x-anon-id": anon_id}  # critical for RLS policies
+        ),
+    )
+
+def ensure_supabase_client():
+    """Guarantee that st.session_state.supabase is a valid client."""
+    if "supabase" in st.session_state and st.session_state.supabase is not None:
+        return st.session_state.supabase
+
+    # Default to guest client
+    client = get_guest_client()
+    st.session_state.supabase = client
+    return client
+
+def get_user_client(session):
+    """Create a Supabase client for logged-in users."""
+    return create_client(
+        url,
+        key,
+        options=ClientOptions(
+            headers={"Authorization": f"Bearer {session.access_token}"}
+        ),
+    )
+
+def require_user_client() -> Client:
+    session = st.session_state.get("session")
+    if not session:
+        raise RuntimeError("Authenticated user required for this operation")
+
+    return get_user_client(session)
+
+@st.cache_resource
+def get_user_client_cached(session):
+    return create_client(
+        url,
+        key,
+        options=ClientOptions(
+            headers={
+                "Authorization": f"Bearer {session.access_token}"
+            }
+        )
+    )
+
+def create_auth_client():
+    return create_client(url, key)
+
+# ==================================================
+# AUTO-REFRESH SESSION (every 50 minutes)
+# ==================================================
+if st.session_state.get("session") and st.session_state.get("supabase"):
+    last_refresh = st.session_state.get("last_refresh")
     
-    except Exception:
-        cookies.pop("supabase_session", None)
-        cookies.save()
-        st.session_state.user = None
-        st.session_state.session = None
-        st.session_state.supabase = get_guest_client()
-  
+    if not last_refresh:
+        st.session_state["last_refresh"] = time.time()
+    
+    elif time.time() - last_refresh > 50 * 60:
+        try:
+            client = st.session_state.supabase
+
+            refresh_response = client.auth.refresh_session()
+
+            if not refresh_response or not refresh_response.session:
+                raise RuntimeError("No session returned during refresh")
+            new_session = refresh_response.session
+            
+            # 🔥 THIS IS THE CRITICAL MISSING STEP
+            client.auth.set_session(
+                new_session.access_token,
+                new_session.refresh_token,
+            )
+
+            st.session_state.session = new_session
+            st.session_state["last_refresh"] = time.time()
+
+            # persist refreshed tokens
+            if cookies:
+                cookies["didact_supabase_session"] = json.dumps({
+                    "access_token": new_session.access_token,
+                    "refresh_token": new_session.refresh_token,
+                    "user": st.session_state.user,
+                })
+                cookies.save()
+                st.write("🔄 Session auto-refreshed")
+
+        except Exception as e:
+            st.warning(f"⚠️ Auto-refresh failed: {e}")
+
 
 # ==================================================
 # INITIAL CLIENT (guest by default)
 # ==================================================
-if "supabase" not in st.session_state:
-    st.session_state.supabase = get_guest_client()
+if "supabase" not in st.session_state or st.session_state.supabase is None:
+    if st.session_state.get("session"):
+        st.session_state.supabase = get_user_client(st.session_state.session)
+    else:
+        st.session_state.supabase = get_guest_client()
 
 # ==================================================
 # LANGUAGE BOOTSTRAP 
 # ==================================================
 tr = LanguageManager.tr
-#query_lang = st.query_params.get("lang")
-#if isinstance(query_lang, list):
-#    query_lang = query_lang[0]
-#
-## Default
-#initial_lang = "en"
-#
-## URL has priority
-#if query_lang in ["en", "cs", "fr", "es", "de"]:
-#    initial_lang = query_lang
-#
-## If logged in already, profile may exist
-#elif st.session_state.get("user"):
-#    try:
-#        res = ensure_supabase_client().table("profiles").select(
-#            "preferred_language"
-#        ).eq("id", st.session_state.user["id"]).execute()
-#        if res.data and res.data[0].get("preferred_language"):
-#            initial_lang = res.data[0]["preferred_language"]
-#    except Exception:
-#        pass
-#
-## Initialize ONCE, before widget
-#if "lang" not in st.session_state:
-#    st.session_state.lang = initial_lang
-#
-#lang = st.session_state.lang
-#t = translations.get(lang, translations["en"])
-#
-#def tr(key: str) -> str:
-#    return translations[lang].get(key, f"⚠️ Missing translation: {key}")
 
 # --------------------------------------------------
 # LOGIN INTENT (PERSISTED)
@@ -233,8 +330,6 @@ if "session" not in st.session_state:
 action = st.query_params.get("action")
 action = action[0] if isinstance(action, list) else action
 
-#if "about_mode" not in st.session_state:
-#    st.session_state.about_mode = None
 # ==================================================
 # LANGUAGE MANAGER — Initialize from URL / Profile / Session
 # ==================================================
@@ -291,18 +386,27 @@ if not st.session_state.user:
         else:
             if st.button(tr("login"), key="login_btn"):
                 try:
-                    res = ensure_supabase_client().auth.sign_in_with_password(
-                        {"email": email, "password": pw}
-                    )
-                    if res.user:
+                    client = create_auth_client()
+
+                    res = client.auth.sign_in_with_password({
+                        "email": email,
+                        "password": pw
+                    })
+
+                    if res.user and res.session:
+                        # 🔐 bind session to client (THIS WAS MISSING)
+                        client.auth.set_session(
+                            res.session.access_token,
+                            res.session.refresh_token,
+                        )
+
                         st.session_state.user = normalize_user(res.user)
                         st.session_state.session = res.session
-
-                        # 🔥 switch to user client
-                        st.session_state.supabase = get_user_client_cached(res.session)
+                        st.session_state.supabase = client
+                        st.session_state.last_refresh = time.time()
 
                         if cookies:
-                            cookies["supabase_session"] = json.dumps({
+                            cookies["didact_supabase_session"] = json.dumps({
                                 "access_token": res.session.access_token,
                                 "refresh_token": res.session.refresh_token,
                                 "user": {
@@ -330,50 +434,57 @@ if not st.session_state.user:
 # LANGUAGE SELECTOR (WIDGET OWNS STATE)
 # ==================================================
 LanguageManager.sidebar_selector()
-#st.sidebar.selectbox(
-#    "🌐 Language / Jazyk / Langue / Idioma / Sprache",
-#    ["en", "cs", "fr", "es", "de"],
-#    key="lang",
-#)
 
 # ==================================================
 # PROFILES (READ cached, WRITE uncached ✅)
 # ==================================================
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=900)
 def load_profile(user_id):
-    res = ensure_supabase_client().table("profiles").select("*").eq(
-        "user_id", user_id
-    ).execute()
-    return res.data[0] if res.data else None
+    client = require_user_client()
+    res = (
+        client
+        .table("profiles")
+        .select("*")
+        .eq("user_id", user_id)
+        .single()
+        .execute()
+    )
+    return res.data
+
+def load_profile_uncached(user_id):
+    client = require_user_client()
+
+    res = (
+        client
+        .table("profiles")
+        .select("*")
+        .eq("user_id", user_id)
+        .single()
+        .execute()
+    )
+    return res.data
 
 def ensure_profile(user_id):
     assert_not_cached_write("ensure_profile")
+
+    client = require_user_client()
 
     profile = load_profile(user_id)
     if profile:
         return profile
 
-    try:
-        ensure_supabase_client().table("profiles").insert({
-            "user_id": user_id,
-            "preferred_language": lang,
-            "plan": "free",
-        }).execute()
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to create profile for user {user_id}: {e}"
-        )
-
+    client.table("profiles").insert({
+        "user_id": user_id,
+        "preferred_language": st.session_state.lang,
+        "plan": "free",
+    }).execute()
     load_profile.clear()
-    profile = load_profile(user_id)
 
+    profile = load_profile(user_id)
     if not profile:
-        raise RuntimeError(
-            f"Profile still missing after insert for user {user_id}"
-        )
+        raise RuntimeError(f"Profile creation failed for user {user_id}")
 
     return profile
-
 
 # ==================================================
 # GUEST SESSIONS (READ cached, WRITE uncached ✅)
@@ -406,35 +517,48 @@ def ensure_guest_session(anon_id):
 # ==================================================
 # LOGGED-IN AREA
 # ==================================================
-user = st.session_state.user
+if st.session_state.user:
+    st.write("hello_muck")
 
-if user:
     try:
-        profile = ensure_profile(user["id"])
+        profile = ensure_profile(st.session_state.user["id"])
         tier = profile["plan"]
         guest = None
     except Exception as e:
-        # auth is broken → reset to guest safely
-        st.session_state.user = None
-        st.session_state.session = None
-        st.session_state.supabase = get_guest_client()
-        profile = None
-        guest = ensure_guest_session(anon_id)
-        tier = "guest"
-        st.warning("Session expired. Switched to guest mode.")
+        st.error(f"Profile error: {e}")
+        st.stop()
+
+    #except Exception as e:
+    #    if not st.session_state.get("user"):
+    #        # only fallback to guest if user really missing
+    #        profile = None
+    #        guest = ensure_guest_session(anon_id)
+    #        tier = "guest"
+    #        st.warning("Session expired. Switched to guest mode.")
 else:
-    profile = "guest"
-    guest = ensure_guest_session(anon_id)
+    st.warning("333.")
+    profile = None
     tier = "guest"
 
+#if cookies and not is_authenticated():
+#    st.info("🔐 Not logged in")
+#    guest = ensure_guest_session(anon_id)
+#    tier = "guest"
+#    profile = "guest"
 # ==================================================
 # PERSIST LANGUAGE CHANGES
 # ==================================================
-if user and profile and profile.get("preferred_language") != st.session_state.lang:
-    ensure_supabase_client().table("profiles").update(
-        {"preferred_language": st.session_state.lang}
-    ).eq("id", user["id"]).execute()
-
+if st.session_state.user and profile and profile.get("preferred_language") != st.session_state.lang:
+    try:
+        client = require_user_client()
+        res = client.table("profiles") \
+            .select("preferred_language") \
+            .eq("user_id", st.session_state.user["id"]) \
+            .single() \
+            .execute()
+        preferred_lang = res.data.get("preferred_language")
+    except Exception:
+        preferred_lang = None
 # ==================================================
 # ENTITLEMENT & ROTATION
 # ==================================================
@@ -496,14 +620,14 @@ methods = load_visible_methods(supabase_client, tier, lang)
 # ==================================================
 # UI LOGOUT
 # ==================================================
-if user:
-    #st.success(f"{tr('welcome')} {user.email}")
+if st.session_state.user:
+    st.success(f"{tr('welcome')}")
 
     def logout():
         st.session_state.user = None
         st.session_state.session = None
         st.session_state.supabase = get_guest_client()
-        cookies.pop("supabase_session", None)
+        cookies.pop("didact_supabase_session", None)
         cookies.save()
         st.query_params.clear()
         st.rerun()
@@ -513,18 +637,18 @@ if user:
 # ==================================================
 # UI Header
 # ==================================================
-st.title(f"🎓 {tr('adapt_with_ai_login_title1')}")
-st.title(f"🎓 {tr('adapt_with_ai_login_title')}")
-if not user: 
+st.title(f"🎓 {tr("title")}")
+if not st.session_state.user: 
     st.error(tr("log_to_use"))
+st.subheader(f"🎓 {tr('adapt_with_ai_login_title')}")
 
 # ==================================================
 #METHODS PAGE RENDERING (possibly move first part - titles - to UI Header)
 # ==================================================
-st.title(tr("title"))
+st.subheader(f"🎓 {tr('adapt_with_ai_login_title1')}")
 st.write(tr("subtitle"))
 
-if user:
+if st.session_state.user:
     plan_name = profile["plan"]
 else:
     plan_name = "guest"
@@ -539,7 +663,7 @@ plan = (
     )
 number_of_methods_to_show = plan["weekly_method_quota"]
 
-if not user:
+if not st.session_state.user:
     st.sidebar.error(
         f"👋 Guest daily quotas: {number_of_methods_to_show} methods visible - 3 AI adaptations\n"
         f"- Create a free account to unlock more."
@@ -659,7 +783,6 @@ for m in filtered_methods:
 # ==================================================
 # AI GENERATION
 # ==================================================
-
 def rate_limit(key, seconds):
     now = time.time()
     last = st.session_state.get(key)
@@ -673,7 +796,7 @@ st.subheader(f"✨ {tr('generate_AI_subheader')}")
 
 # can_generate=function in db_operations.py, 
 # it compares quotas from profile table with used-up
-if user: 
+if st.session_state.user: 
     plan = ensure_supabase_client().table("plans").select("*").eq(
         "name", profile["plan"]
     ).single().execute().data
@@ -682,18 +805,11 @@ else:
     guest = ensure_guest_session(anon_id)
     can_generate, msg = can_generate_guest(guest)
 
-    # persist resets (only if periods changed)
-    ensure_supabase_client().table("guest_sessions").update({
-    "ai_used_week": guest["ai_used_week"],
-    "ai_used_month": guest["ai_used_month"],
-    "week_start": guest["week_start"].isoformat() if guest["week_start"] else None,
-    "month_start": guest["month_start"].isoformat() if guest["month_start"] else None,
-}).eq("anon_id", anon_id).execute()
-
     if msg:
         msg = tr("guest_limit_reached")
         st.error(msg)
         st.stop()
+
 topic = st.text_input(tr("enter_topic"))    
 
 method_options = {m["name"]: m["id"] for m in filtered_methods}
@@ -702,7 +818,6 @@ selected_names = st.multiselect(
     f"{tr('Choose_methods_for_AI')}:",
     list(method_options.keys()),
 )
-
 # Disable new selections when 2 are picked
 if len(selected_names) >= 2:
     st.info("✅ " + tr("selected_max_two"))
@@ -739,12 +854,10 @@ if selected_names:
         # Append a formatted version for later use in the prompt
         methods_steps.append(f"{method_data.get('name', method_names)} — {steps_text}")
 
-
     # Optional: preview in Streamlit
     #st.markdown(f"### 🧩 {tr('selected_methods')}")
     #for ms in selected_methods:
     #    st.markdown(f"- {ms}")
-
     if st.button(tr("generate_button")):
         if not topic:
             st.warning(tr("enter_topic_first"))
@@ -768,19 +881,22 @@ if selected_names:
 
             with st.spinner(tr("generating_lesson")):
                 prompt = f"""
-                You are an expert instructional designer. 
-                Adapt the following teaching methods to re-create lesson outlines tailored for the topic "{topic}".
-                
-                Methods and their ordered steps:
-                {chr(10).join(methods_steps)}
-                            
-                For each method, provide:
-                - A concise adapted title
-                - One clear learning objective
-                - Ordered step-by-step instructions
-                - One before-activity and one after-activity
-                Keep total under 280 words. Use {lang} language, unless the topic "{topic}" in another language (then use that language).
+                Just say "Hi" back. it is for test.
                 """
+                #prompt = f"""
+                #You are an expert instructional designer. 
+                #Adapt the following teaching methods to re-create lesson outlines tailored for the topic "{topic}".
+                #
+                #Methods and their ordered steps:
+                #{chr(10).join(methods_steps)}
+                #            
+                #For each method, provide:
+                #- A concise adapted title
+                #- One clear learning objective
+                #- Ordered step-by-step instructions
+                #- One before-activity and one after-activity
+                #Keep total under 280 words. Use {lang} language, unless the topic "{topic}" in another language (then use that language).
+                #"""
                 try:
                     resp = client.chat.completions.create(
                         model=MODEL,
@@ -789,22 +905,55 @@ if selected_names:
                     )
                     st.session_state.ai_result = resp.choices[0].message.content
                     st.session_state.ai_topic = topic
+                    
+                    if st.session_state.user:
+                        fresh_profile = load_profile_uncached(st.session_state.user["id"])
+                        updated_profile = record_generation(fresh_profile)
+                        st.write(updated_profile)
 
-                    if user:
-                        profile = record_generation(profile)
-                        ensure_supabase_client().table("profiles").update(profile).eq(
-                            "id", user["id"]
-                        ).execute()
+                        try:
+                            ensure_supabase_client().table("profiles").update(updated_profile).eq(
+                                "id", st.session_state.user["id"]
+                            ).execute()
+                        except Exception as e:
+                            st.error(f"{tr('update?error!!!!!!!')}: {e}")
                     else:
-                        ensure_supabase_client().table("guest_sessions").update({
-                            "lessons_generated": guest["lessons_generated"] + 1,
-                            "ai_used_week": guest["ai_used_week"] + 1,
-                            "ai_used_month": guest["ai_used_month"] + 1,
-                            "last_generated_at": "now()"
-                        }).eq("anon_id", anon_id).execute()
+                        load_guest_session.clear()
+                        # Always pull the latest data to avoid stale cached values
+                        resp = ensure_supabase_client().table("guest_sessions") \
+                            .select("*").eq("anon_id", anon_id).single().execute()
+                        guest_data = resp.data or {}
 
+                        # Safely handle missing or null fields
+                        lessons_generated = (guest_data.get("lessons_generated") or 0) + 1
+                        ai_used_week = (guest_data.get("ai_used_week") or 0) + 1
+                        ai_used_month = (guest_data.get("ai_used_month") or 0) + 1
+
+                        # Optionally keep week/month start fields consistent
+                        week_start = guest_data.get("week_start") or date.today().isoformat()
+                        month_start = guest_data.get("month_start") or date.today().replace(day=1).isoformat()
+
+                        update_data = {
+                            "lessons_generated": lessons_generated,
+                            "ai_used_week": ai_used_week,
+                            "ai_used_month": ai_used_month,
+                            "last_generated_at": "now()",
+                            "week_start": week_start,
+                            "month_start": month_start,
+                        }
+
+                        result = ensure_supabase_client().table("guest_sessions") \
+                            .update(update_data).eq("anon_id", anon_id).execute()
+
+                        st.write("✅ Update result:", result.data)
+                        st.write("Before update:", guest_data)
+                        st.write("Sending update:", update_data)
+
+                           
                 except Exception as e:
-                    st.error(f"{tr('api_error')}: {e}")
+                    st.error(f"{tr('api_error!!!!!!!')}: {e}")
+                    
+
 
 if st.session_state.ai_result:
     st.markdown("---")
@@ -815,3 +964,30 @@ if st.session_state.ai_result:
     st.markdown(st.session_state.ai_result)
 
 
+# ==================================================
+# PERIOD RESET (moved here to avoid overwriting AI counters)
+# ==================================================
+if not st.session_state.user:
+    today = date.today()
+    monday = today - timedelta(days=today.weekday())
+    current_week_start = monday.isoformat()
+    current_month_start = today.replace(day=1).isoformat()
+
+    resp = ensure_supabase_client().table("guest_sessions") \
+        .select("ai_used_week, ai_used_month, week_start, month_start") \
+        .eq("anon_id", anon_id).single().execute()
+    guest_data = resp.data or {}
+
+    should_reset_week = guest_data.get("week_start") != current_week_start
+    should_reset_month = guest_data.get("month_start") != current_month_start
+
+    update_fields = {}
+    if should_reset_week and guest_data.get("ai_used_week", 0) != 0:
+        update_fields["ai_used_week"] = 0
+    if should_reset_month and guest_data.get("ai_used_month", 0) != 0:
+        update_fields["ai_used_month"] = 0
+    if should_reset_week or should_reset_month:
+        update_fields["week_start"] = current_week_start
+        update_fields["month_start"] = current_month_start
+        ensure_supabase_client().table("guest_sessions") \
+            .update(update_fields).eq("anon_id", anon_id).execute()
