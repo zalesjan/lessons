@@ -10,7 +10,7 @@ from modules.languages import translations
 from modules.db_operations import record_generation, can_generate_lesson, can_generate_guest, safe_json_load
 from modules.language_manager import LanguageManager
 from streamlit_cookies_manager import EncryptedCookieManager
-
+#from streamlit_cookies_manager import CookieManager
 
 # ==================================================
 # CACHE DEBUG (🧪 TURN OFF IN PROD IF YOU WANT)
@@ -49,22 +49,12 @@ for k, v in {
 #  ==================================================
 # PAGE CONFIG
 # ==================================================
-st.write("🔍 RUN START")
-st.write("user:", st.session_state.get("user"))
-st.write("session:", bool(st.session_state.get("session")))
-st.write("auth_state:", st.session_state.get("auth_state"))
 
 st.set_page_config(page_title="Didact-io", page_icon="🧩", layout="wide")
 
 # ==================================================
 # SESSION RESTORE - COOKIES
 # ==================================================
-def is_authenticated():
-    return (
-        isinstance(st.session_state.get("user"), dict)
-        and "id" in st.session_state.user
-        and st.session_state.get("session") is not None
-    )
 
 def normalize_user(user):
     """
@@ -86,59 +76,51 @@ def normalize_user(user):
 
     raise TypeError(f"Unsupported user type: {type(user)}")
 
-def restore_user_from_cookie() -> bool:
+def restore_user_from_cookie():
     if cookies is None:
-        return False
+        return None, None, None
+
+    raw = cookies.get("didact_supabase_session")
+    if not raw:
+        return None, None, None
 
     try:
-        raw = cookies["didact_supabase_session"]
         data = json.loads(raw)
-
         access_token = data.get("access_token")
         refresh_token = data.get("refresh_token")
 
         if not access_token or not refresh_token:
-            return False
+            return None, None, None
 
         client = create_client(url, key)
         client.auth.set_session(access_token, refresh_token)
 
         session = client.auth.get_session()
         if not session or not session.user:
-            return False
+            return None, None, None
 
-        # ✅ SINGLE SOURCE OF TRUTH
-        st.session_state.session = session
-        st.session_state.user = {
-            "id": session.user.id,
-            "email": session.user.email,
-        }
-        st.session_state.supabase = client
-
-        # persist refreshed tokens ONLY
+        # 🔐 persist refreshed tokens
         cookies["didact_supabase_session"] = json.dumps({
             "access_token": session.access_token,
             "refresh_token": session.refresh_token,
         })
         cookies.save()
 
-        return True
+        user = {
+            "id": session.user.id,
+            "email": session.user.email,
+        }
 
-    except Exception as e:
-        st.error(f"RESTORE FAILED: {e}")
-        return False
+        return client, session, user
 
-        #st.warning(f"⚠️ Session restore failed: {e}")
-        #cookies.save()
-        #st.session_state.user = None
-        #st.session_state.session = None
-        #st.session_state.supabase = get_guest_client()
-        #return None
+    except Exception:
+        return None, None, None
 
-COOKIE_PASSWORD = st.secrets.get("cookies", {}).get("cookie_password")
+COOKIE_PASSWORD = st.secrets["cookies"]["cookie_password"]
 cookies = None
 
 if COOKIE_PASSWORD:
+    #cookies = CookieManager(prefix="didact")
     cookies = EncryptedCookieManager(
         prefix="didact",
         password=COOKIE_PASSWORD,
@@ -149,46 +131,35 @@ if cookies is not None and not cookies.ready():
     st.stop()
 
 # ==================================================
-# AUTH BOOTSTRAP BARRIER
+# AUTH INIT (SINGLE SOURCE OF TRUTH)
 # ==================================================
+if "auth_loaded" not in st.session_state:
+ 
+    client, session, user = restore_user_from_cookie()
 
-if "auth_state" not in st.session_state:
-    st.session_state.auth_state = "init"   # init | ready
+    st.session_state.supabase = client
+    st.session_state.session = session
+    st.session_state.user = user
 
-if st.session_state.auth_state == "init":
-
-    # 1️⃣ If session already exists (warm rerun, login, etc.)
-    if st.session_state.get("session") and st.session_state.get("user"):
-        st.session_state.auth_state = "ready"
-
-    else:
-        # 2️⃣ Cold start → try cookie restore
-        restored = False
-        if cookies and cookies.ready():
-            restored = restore_user_from_cookie()
-
-        st.session_state.auth_state = "ready"
-
-        if restored:
-            st.rerun()
-
+    st.session_state.auth_loaded = True
 
 # ==================================================
 # STABLE ANON ID MANAGEMENT (persistent via URL)
 # ==================================================
 def get_or_create_anon_id():
     """Ensure a persistent anon_id stored in URL and session_state."""
-    query_params = st.query_params
-    anon_id = query_params.get("anon_id")
-
+    if "anon_id" in st.session_state:
+        return st.session_state.anon_id
+    
+    anon_id = st.query_params.get("anon_id")
     if isinstance(anon_id, list):
         anon_id = anon_id[0]
 
     # If missing, generate new anon_id and update URL
     if not anon_id:
         anon_id = str(uuid.uuid4())
-        query_params["anon_id"] = anon_id
-        st.query_params.update(query_params)
+        st.query_params["anon_id"] = anon_id
+        st.query_params.update({"anon_id": anon_id})
 
     # Sync to session_state
     st.session_state.anon_id = anon_id
@@ -400,27 +371,35 @@ if not st.session_state.user:
                             res.session.refresh_token,
                         )
 
-                        st.session_state.user = normalize_user(res.user)
+                        st.session_state.user = {
+                            "id": res.user.id,
+                            "email": res.user.email,
+                        }                        
                         st.session_state.session = res.session
                         st.session_state.supabase = client
+
                         st.session_state.last_refresh = time.time()
 
-                        if cookies:
+                        if cookies is not None:
                             cookies["didact_supabase_session"] = json.dumps({
                                 "access_token": res.session.access_token,
                                 "refresh_token": res.session.refresh_token,
-                                "user": {
-                                    "id": res.user["id"],
-                                    "email": res.user.email,
-                                },
                             })
+                            st.success("About to save cookies")
                             cookies.save()
-
+                            
+                        
                         # 🔁 post-login redirect
                         next_page = st.query_params.get("next")
                         next_page = next_page[0] if isinstance(next_page, list) else next_page
 
-                        st.query_params.clear()
+                        # 🔁 SAFE post-login redirect (preserve anon_id + others)
+                        params = dict(st.query_params)
+
+                        # keep language explicit if you want
+                        params["lang"] = st.session_state.lang
+
+                        st.query_params.update(params)
 
                         if next_page == "billing":
                             st.switch_page("pages/9_💳_Billing.py")
@@ -518,7 +497,6 @@ def ensure_guest_session(anon_id):
 # LOGGED-IN AREA
 # ==================================================
 if st.session_state.user:
-    st.write("hello_muck")
 
     try:
         profile = ensure_profile(st.session_state.user["id"])
@@ -537,14 +515,10 @@ if st.session_state.user:
     #        st.warning("Session expired. Switched to guest mode.")
 else:
     st.warning("333.")
-    profile = None
+    guest = ensure_guest_session(anon_id)
+    profile = "guest"
     tier = "guest"
 
-#if cookies and not is_authenticated():
-#    st.info("🔐 Not logged in")
-#    guest = ensure_guest_session(anon_id)
-#    tier = "guest"
-#    profile = "guest"
 # ==================================================
 # PERSIST LANGUAGE CHANGES
 # ==================================================
@@ -621,7 +595,7 @@ methods = load_visible_methods(supabase_client, tier, lang)
 # UI LOGOUT
 # ==================================================
 if st.session_state.user:
-    st.success(f"{tr('welcome')}")
+    #st.success(f"{tr('welcome')}")
 
     def logout():
         st.session_state.user = None
