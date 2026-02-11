@@ -42,7 +42,7 @@ class LanguageManager:
 
         # 4. Fallback
         else:
-            st.session_state.lang = "en"
+            st.session_state.lang = "cs"
 
         return st.session_state.lang
 
