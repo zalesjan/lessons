@@ -329,7 +329,8 @@ tr = LanguageManager.tr
 force_login = st.session_state.pop("force_login", False)
 
 if not st.session_state.user:
-    with st.sidebar.expander("🔐 Login / Sign up",
+    with st.sidebar.expander(f"🔐 {tr("login")} / {tr("signup")}",
+
         expanded=force_login
     ):
         
@@ -514,7 +515,7 @@ if st.session_state.user:
     #        tier = "guest"
     #        st.warning("Session expired. Switched to guest mode.")
 else:
-    st.warning("333.")
+    #st.warning("333.")
     guest = ensure_guest_session(anon_id)
     profile = "guest"
     tier = "guest"
@@ -522,17 +523,22 @@ else:
 # ==================================================
 # PERSIST LANGUAGE CHANGES
 # ==================================================
-if st.session_state.user and profile and profile.get("preferred_language") != st.session_state.lang:
-    try:
+if st.session_state.user and profile:
+    current_lang = st.session_state.lang
+    saved_lang = profile.get("preferred_language")
+
+    if saved_lang != current_lang:
         client = require_user_client()
-        res = client.table("profiles") \
-            .select("preferred_language") \
-            .eq("user_id", st.session_state.user["id"]) \
-            .single() \
-            .execute()
-        preferred_lang = res.data.get("preferred_language")
-    except Exception:
-        preferred_lang = None
+
+        client.table("profiles").update(
+            {"preferred_language": current_lang}
+        ).eq(
+            "user_id", st.session_state.user["id"]
+        ).execute()
+
+        # 🔥 bust cached profile so next reads are fresh
+        load_profile.clear()
+
 # ==================================================
 # ENTITLEMENT & ROTATION
 # ==================================================
@@ -578,18 +584,24 @@ def load_visible_methods(_supabase_client, tier: str, lang: str):
         )
 
     # parse JSON once
-    for m in res:
-        m["_parsed"] = {
-            "before": safe_json_load(m.get("before")),
-            "after": safe_json_load(m.get("after")),
-            "content": safe_json_load(m.get("content_md")),
-            "tools": safe_json_load(m.get("tools")),
-        }
+
 
     return res
 
 supabase_client = ensure_supabase_client()
 methods = load_visible_methods(supabase_client, tier, lang)
+parsed_methods = []
+
+for m in methods:
+    parsed = {
+        **m,  # shallow copy
+        "_parsed": {
+        "before": safe_json_load(m.get("before")),
+        "after": safe_json_load(m.get("after")),
+        "content": safe_json_load(m.get("content_md")),
+        "tools": safe_json_load(m.get("tools")),
+    }}
+    parsed_methods.append(parsed)
 
 # ==================================================
 # UI LOGOUT
@@ -611,16 +623,16 @@ if st.session_state.user:
 # ==================================================
 # UI Header
 # ==================================================
-st.title(f"🎓 {tr("title")}")
+st.title(tr("title"))
 if not st.session_state.user: 
     st.error(tr("log_to_use"))
+st.subheader(f"🎓 {tr('adapt_with_ai_login_title1')}")
 st.subheader(f"🎓 {tr('adapt_with_ai_login_title')}")
+st.write(tr("subtitle"))
 
 # ==================================================
 #METHODS PAGE RENDERING (possibly move first part - titles - to UI Header)
 # ==================================================
-st.subheader(f"🎓 {tr('adapt_with_ai_login_title1')}")
-st.write(tr("subtitle"))
 
 if st.session_state.user:
     plan_name = profile["plan"]
@@ -643,7 +655,7 @@ if not st.session_state.user:
         f"- Create a free account to unlock more."
     )
 
-filtered_methods = methods[:number_of_methods_to_show]
+filtered_methods = parsed_methods[:number_of_methods_to_show]
 method_names = [m["name"] for m in filtered_methods if "id" in m]
 
 method_qs = st.query_params.get("method", None)
@@ -706,7 +718,7 @@ for m in filtered_methods:
         # --- RIGHT: button ---
         with cols[1]:
             if st.button(
-                tr("Hide manual") if opened else f"▶ {tr("open_method")}",
+                tr("hide_manual") if opened else f"▶ {tr("open_method")}",
                 key=f"btn-{m_id}"
             ):
                 if opened:
@@ -883,7 +895,7 @@ if selected_names:
                     if st.session_state.user:
                         fresh_profile = load_profile_uncached(st.session_state.user["id"])
                         updated_profile = record_generation(fresh_profile)
-                        st.write(updated_profile)
+                        #st.write(updated_profile)
 
                         try:
                             ensure_supabase_client().table("profiles").update(updated_profile).eq(
@@ -919,15 +931,13 @@ if selected_names:
                         result = ensure_supabase_client().table("guest_sessions") \
                             .update(update_data).eq("anon_id", anon_id).execute()
 
-                        st.write("✅ Update result:", result.data)
-                        st.write("Before update:", guest_data)
-                        st.write("Sending update:", update_data)
+                        #st.write("✅ Update result:", result.data)
+                        #st.write("Before update:", guest_data)
+                        #st.write("Sending update:", update_data)
 
-                           
                 except Exception as e:
                     st.error(f"{tr('api_error!!!!!!!')}: {e}")
                     
-
 
 if st.session_state.ai_result:
     st.markdown("---")
@@ -936,7 +946,6 @@ if st.session_state.ai_result:
         st.caption(f"🧠 {st.session_state.ai_topic}")
 
     st.markdown(st.session_state.ai_result)
-
 
 # ==================================================
 # PERIOD RESET (moved here to avoid overwriting AI counters)

@@ -143,7 +143,7 @@ Soon you'll be able to build full lessons and combine reusable blocks.
         "adapt_with_ai_login_title": "If You Like, Adapt it to Your Topic with AI!",
         "log_to_use": "Log in to use AI or explore more teaching methods. Use Login button in the left pane",
         "title": "Didact-io = Great Teaching Methods in a few seconds",
-        "title": "Composed Lesson Variants",
+        "title": "Didact.io = great teaching methods",
         "subtitle": "Each variant centers a different method and includes 1–2 lead-in and 1–2 consolidation steps.",
         "before": "**People tried this method before:**",
         "main_method": "Suggested steps",
@@ -176,7 +176,7 @@ Soon you'll be able to build full lessons and combine reusable blocks.
         "logout": "Logout",
 
         # Logged-in
-        "welcome": "Welcome",
+        "welcome": "Welcome to Didact.io",
         "premium_generations_notification": "Premium plan – generations left",
         "free_tier_generations_notification": "Free plan – generations left",
         "no_more_free_generations": "You have no more free generations today.",
@@ -367,7 +367,7 @@ Brzy budete moci stavět celé lekce a kombinovat předpřipravené bloky.
         "logout": "Odhlásit",
         
         # Logged-in
-        "welcome": "Vítej",
+        "welcome": "Vítej v Didact.io",
         "premium_generations_notification": "Prémiový plán – zbývající generace",
         "free_tier_generations_notification": "Zdarma – zbývající generace",
         "no_more_free_generations": "Dnes už nemáš žádné další generace zdarma.",
