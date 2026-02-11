@@ -68,11 +68,11 @@ class LanguageManager:
     @staticmethod
     def t():
         """Returns translations for the active language. With fallback."""
-        lang = st.session_state.get("lang", "en")
-        return translations.get(lang, translations["en"])
+        lang = st.session_state.get("lang", "cs")
+        return translations.get(lang, translations["cs"])
 
     @staticmethod
     def tr(key):
         """Returns translation for a specific key with fallback warning."""
-        lang = st.session_state.get("lang", "en")
+        lang = st.session_state.get("lang", "tr")
         return translations.get(lang, {}).get(key, f"⚠️ Missing translation: {key}")
