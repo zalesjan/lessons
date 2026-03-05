@@ -163,6 +163,9 @@ Soon you'll be able to build full lessons and combine reusable blocks.
         "tips": "Tips",
 
         # Auth
+        "guest_daily_quotas_error_1":  "👋 Guest daily quotas: {number_of_methods_to_show} methods visible - 3 AI adaptations",
+        "guest_daily_quotas_error_2": "Create a free account to unlock more",
+        
         "promotion_mode": "PROMOTION MODE – you can see 7 methods not signed in, 10 methods in free tier, and all in paid tier.",
         "select_to": "Select to:",
         "login": "Login",
@@ -196,15 +199,15 @@ Soon you'll be able to build full lessons and combine reusable blocks.
    
     "cs": {
         # Billing page
-"billing_title": "Upgrade to Didact.io Pro",
-"billing_intro": "Unlock full access to teaching methods and higher AI generation limits.",
+"billing_title": "Upgraduj na Didact.io Pro",
+"billing_intro": "Odemkni plný přístup k více metodám a k většímu množství adaptací na Tvoje dané téma",
 "billing_no_plans": "No subscription plans are available at the moment.",
-"billing_choose_plan": "Choose your subscription plan",
+"billing_choose_plan": "Vyber si z možností předplatného",
 "billing_recommended": "Recommended",
-"billing_select_plan": "Select {label} plan",
-"billing_select_prompt": "Select a plan above to continue to checkout.",
-"billing_ai_limit": "{ai_generations} AI-generated lessons per day",
-"billing_ai_unlimited": "Unlimited AI-generated lessons",
+"billing_select_plan": "Vyber {label} plán",
+"billing_select_prompt": "Vyber daný typ předplatného než přejdeš k platbě.",
+"billing_ai_limit": "{ai_generations} adaptací na téma za den",
+"billing_ai_unlimited": "Neomezený počet adaptací pomocí AI",
     "billing_login_required_title": "Vyžadováno přihlášení",
     "billing_login_required_text": "Pro správu předplatného se prosím přihlaste nebo si vytvořte účet.",
     "billing_login_cta": "Přihlásit se nebo vytvořit účet",
@@ -221,7 +224,7 @@ Soon you'll be able to build full lessons and combine reusable blocks.
         "- Neuchováváme žádné platební údaje\n"
         "- DPH a faktury zpracovány automaticky"
     ),
-"billing_checkout": "Proceed to checkout",
+"billing_checkout": "Pokračuj k platbě",
 "billing_redirecting": "Redirecting to secure payment...",
 "billing_checkout_failed": "Unable to start checkout session.",
 "billing_proceed_payment": "Proceed to secure payment",
@@ -231,12 +234,12 @@ Soon you'll be able to build full lessons and combine reusable blocks.
         "billing_select_prompt": "Vyber tarif, který ti nejlépe vyhovuje:",
         
         # about text
-        "about_short_btn": "Co je Didact.io - krátce",
-        "about_full_btn": "Co je Didact.io - dlouze",
+        "about_short_btn": "Co je Didact.io? (krátce)",
+        "about_full_btn": "Co je Didact.io? (dlouze)",
         "about_short": """
 # 🧩 O aplikaci Didact-io
 
-Didact-io je jednoduchý a rychlý nástroj pro to, jak přinést více struktury do výuky, pro dosažení pedagogického cíle a větší rozmanitosti.
+Didact-io je jednoduchý a rychlý nástroj,  ktrý učiteli pomůže přinést více struktury do výuky, a taky usnadní dosažení pedagogického cíle a větší rozmanitosti hodin.
 
 Místo zdlouhavého hledání metod v příručkách můžete během pár vteřin procházet jasně popsané didaktické postupy.
 
@@ -253,9 +256,9 @@ Naším cílem je učitelům ulehčit přípravu, ušetřit čas a podpořit akt
 Výuka není jen předávání informací, ale vytváření smysluplných situací podporujících učení.
 
 ### **Výhody pro učitele**
-- Méně stresu při přípravě  
+- Méně stresu a času na přípravách  
 - Lepší struktura hodiny  
-- Plynulejší průběh aktivit  
+- Plynulejší, účelnější a klidnější průběh aktivit  
 - Snadná obměna výukových postupů  
 - Větší jistota při používání nových metod a technik  
 
@@ -303,7 +306,7 @@ A pokud potřebujete metodu upravit na konkrétní téma, AI to udělá během n
 - Filtrování podle věku, předmětu a jazyka    
 - Nástroj pro stavbu celé hodiny  
 - Znovupoužitelné bloky výuky  
-- Silnější AI podporu pro tvorbu delších lekcí  
+- Silnější AI podporu pro tvorbu lekcí  
 """,
 
         "guide": """
@@ -361,6 +364,9 @@ Brzy budete moci stavět celé lekce a kombinovat předpřipravené bloky.
         "email": "Emailová adresa",
         "password": "Heslo",
         "create_account": "Vytvořit účet",
+        "guest_daily_quotas_error_1": "Denní kvóta pro hosty: {number_of_methods_to_show} zobrazené metody - 3 AI adaptace",
+        "guest_daily_quotas_error_1": "Vytvoř si účet zdarma/Přihlaš se a získej víc",
+    
         "check_email_for_confirmation": "Zkontroluj email pro potvrzení registrace.",
         "could_not_sign_up": "Registrace se nezdařila.",
         "invalid_credentials": "Neplatné přihlašovací údaje.",
@@ -530,6 +536,8 @@ Création de leçons complètes et blocs combinables.
         "tips": "Conseils",
         
         # Auth
+        "guest_daily_quotas_error_1":  "👋 Guest daily quotas: {number_of_methods_to_show} methods visible - 3 AI adaptations",
+        "guest_daily_quotas_error_2": "Create a free account to unlock more",
         "promotion_mode": "MODE PROMO – 7 méthodes sans connexion, 10 en mode gratuit, toutes en premium.",
         "select_to": "Choisir :",
         "login": "Connexion",
@@ -712,6 +720,9 @@ Construcción de clases completas y bloques combinables.
         "tips": "Consejos",
        
         # Auth
+        "guest_daily_quotas_error_1":  "👋 Guest daily quotas: {number_of_methods_to_show} methods visible - 3 AI adaptations",
+        "guest_daily_quotas_error_2": "Create a free account to unlock more",
+        
         "promotion_mode": "Modo promoción – 7 métodos sin sesión, 10 métodos en modo gratuito y todos en modo premium.",
         "select_to": "Selecciona:",
         "login": "Iniciar sesión",
@@ -889,6 +900,9 @@ Bald: vollständige Unterrichtseinheiten und kombinierbare Bausteine.
         "tips": "Tipps",
 
         # Auth
+        "guest_daily_quotas_error_1":  "👋 Guest daily quotas: {number_of_methods_to_show} methods visible - 3 AI adaptations",
+        "guest_daily_quotas_error_2": "Create a free account to unlock more",
+        
         "promotion_mode": "PROMO-MODUS – 7 Methoden ohne Login, 10 im kostenlosen Modus, alle im Premium-Modus.",
         "select_to": "Auswählen:",
         "login": "Login",
