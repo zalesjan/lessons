@@ -365,7 +365,7 @@ Brzy budete moci stavět celé lekce a kombinovat předpřipravené bloky.
         "password": "Heslo",
         "create_account": "Vytvořit účet",
         "guest_daily_quotas_error_1": "Denní kvóta pro hosty: {number_of_methods_to_show} zobrazené metody - 3 AI adaptace",
-        "guest_daily_quotas_error_1": "Vytvoř si účet zdarma/Přihlaš se a získej víc",
+        "guest_daily_quotas_error_2": "Vytvoř si účet zdarma/Přihlaš se a získej víc",
     
         "check_email_for_confirmation": "Zkontroluj email pro potvrzení registrace.",
         "could_not_sign_up": "Registrace se nezdařila.",

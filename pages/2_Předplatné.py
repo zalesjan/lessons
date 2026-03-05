@@ -70,7 +70,7 @@ if st.session_state.user:
         user_supabase
         .table("profiles")
         .select("*")
-        .eq("user_id", st.session_state.user.id)
+        .eq("user_id", st.session_state.user["id"])
         .single()
         .execute()
     )
@@ -279,8 +279,8 @@ if st.session_state.user:
                 f"{st.secrets['supabase']['functions_url']}/create-checkout",
                 json={
                     "interval": selected_interval,
-                    "user_id": st.session_state.user.id,
-                    "email": st.session_state.user.email,
+                    "user_id": st.session_state.user["id"],
+                    "email": st.session_state.user["email"]
                 },
                 headers={
                     "Authorization": f"Bearer {st.session_state.session.access_token}"
