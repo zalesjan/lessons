@@ -426,10 +426,10 @@ def load_profile(user_id):
         .table("profiles")
         .select("*")
         .eq("user_id", user_id)
-        .single()
+        .maybe_single()
         .execute()
     )
-    return res.data
+    return res.data if res.data else None
 
 def load_profile_uncached(user_id):
     client = require_user_client()
@@ -439,7 +439,7 @@ def load_profile_uncached(user_id):
         .table("profiles")
         .select("*")
         .eq("user_id", user_id)
-        .single()
+        .maybe_single()
         .execute()
     )
     return res.data
@@ -452,6 +452,13 @@ def ensure_profile(user_id):
     profile = load_profile(user_id)
     if profile:
         return profile
+
+    st.write("DEBUG AUTH CHECK")
+    st.json({
+        "auth_uid": st.session_state.session.user.id if st.session_state.get("session") else None,
+        "profile_user_id": user_id,
+        "equal?": st.session_state.session.user.id == user_id
+    })
 
     client.table("profiles").insert({
         "user_id": user_id,
@@ -498,14 +505,20 @@ def ensure_guest_session(anon_id):
 # LOGGED-IN AREA
 # ==================================================
 if st.session_state.user:
+    user_id = st.session_state.user["id"]
 
     try:
-        profile = ensure_profile(st.session_state.user["id"])
+        profile = ensure_profile(user_id)
+        if not profile:
+            time.sleep(2)
+            profile = ensure_profile(user_id)
         tier = profile["plan"]
         guest = None
     except Exception as e:
         st.error(f"Profile error: {e}")
         st.stop()
+
+    
 
     #except Exception as e:
     #    if not st.session_state.get("user"):
@@ -651,9 +664,10 @@ number_of_methods_to_show = plan["weekly_method_quota"]
 
 if not st.session_state.user:
     st.sidebar.error(
-        f"👋 Guest daily quotas: {number_of_methods_to_show} methods visible - 3 AI adaptations\n"
-        f"- Create a free account to unlock more."
-    )
+        f"✨ {tr("guest_daily_quotas_error_1")}" + "**\n"
+        f"✨ {tr("guest_daily_quotas_error_2")}"
+        )
+      
 
 filtered_methods = parsed_methods[:number_of_methods_to_show]
 method_names = [m["name"] for m in filtered_methods if "id" in m]
@@ -866,23 +880,23 @@ if selected_names:
                 MODEL = "gpt-4o-mini"
 
             with st.spinner(tr("generating_lesson")):
-                prompt = f"""
-                Just say "Hi" back. it is for test.
-                """
                 #prompt = f"""
-                #You are an expert instructional designer. 
-                #Adapt the following teaching methods to re-create lesson outlines tailored for the topic "{topic}".
-                #
-                #Methods and their ordered steps:
-                #{chr(10).join(methods_steps)}
-                #            
-                #For each method, provide:
-                #- A concise adapted title
-                #- One clear learning objective
-                #- Ordered step-by-step instructions
-                #- One before-activity and one after-activity
-                #Keep total under 280 words. Use {lang} language, unless the topic "{topic}" in another language (then use that language).
+                #Just say "Hi" back. it is for test.
                 #"""
+                prompt = f"""
+                You are an expert instructional designer. 
+                Adapt the following teaching methods to re-create lesson outlines tailored for the topic "{topic}".
+                
+                Methods and their ordered steps:
+                {chr(10).join(methods_steps)}
+                            
+                For each method, provide:
+                - A concise adapted title
+                - One clear learning objective
+                - Ordered step-by-step instructions
+                - One before-activity and one after-activity
+                Keep total under 280 words. Use {lang} language, unless the topic "{topic}" in another language (then use that language).
+                """
                 try:
                     resp = client.chat.completions.create(
                         model=MODEL,
