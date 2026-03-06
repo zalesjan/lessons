@@ -663,10 +663,13 @@ plan = (
 number_of_methods_to_show = plan["weekly_method_quota"]
 
 if not st.session_state.user:
-    st.sidebar.error(
-        f"✨ {tr("guest_daily_quotas_error_1")}" + "**\n"
-        f"✨ {tr("guest_daily_quotas_error_2")}"
-        )
+    msg3 = tr("guest_mode")
+    msg1 = tr("guest_daily_quotas_error_1").format(
+    number_of_methods_to_show=number_of_methods_to_show
+    )
+    msg2 = tr("guest_daily_quotas_error_2")
+
+    st.sidebar.error(f"✨ {msg3}\n✨ {msg1}\n✨ {msg2}")
       
 
 filtered_methods = parsed_methods[:number_of_methods_to_show]

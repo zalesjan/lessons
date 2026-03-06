@@ -336,7 +336,7 @@ Brzy budete moci stavět celé lekce a kombinovat předpřipravené bloky.
 
         "adapt_with_ai_login_title1": "Najdi si super didaktickou metodu z nabídky", 
         "adapt_with_ai_login_title": "Chceš-li, adaptuj ji na své téma pomocí AI!",
-        "log_to_use": " Přihlaš se a získej přístup k více metodám a AI adaptacím.",
+        "log_to_use": "✨ Uživatel nepřihlášen, jsi v režimu host. Přihlaš se a získej přístup k více metodám a AI adaptacím.",
         "title": "Didact-io = Didaktické metody ihned",
         "subtitle": "Každá varianta staví na jiné hlavní metodě a obsahuje 1–2 úvodní a 1–2 závěrečné aktivity.",
         "before": "Toto můžeš zařadit před:",
@@ -357,14 +357,14 @@ Brzy budete moci stavět celé lekce a kombinovat předpřipravené bloky.
         "tips": "Tipy",
 
         # Auth
-        "promotion_mode": "Promo režim – 7 metod bez přihlášení, 10 metod zdarma po přihlášení, vše v placené verzi.",
+        "guest_mode": "Uživatel nepřihlášen, jste v režimu host",
         "select_to": "Vyber:",
         "login": "Přihlásit",
         "signup": "Registrovat",
         "email": "Emailová adresa",
         "password": "Heslo",
         "create_account": "Vytvořit účet",
-        "guest_daily_quotas_error_1": "Denní kvóta pro hosty: {number_of_methods_to_show} zobrazené metody - 3 AI adaptace",
+        "guest_daily_quotas_error_1": "Denní kvóta pro hosty: {number_of_methods_to_show} zobrazených metod - 3 AI adaptace",
         "guest_daily_quotas_error_2": "Vytvoř si účet zdarma/Přihlaš se a získej víc",
     
         "check_email_for_confirmation": "Zkontroluj email pro potvrzení registrace.",
