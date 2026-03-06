@@ -904,7 +904,7 @@ if selected_names:
                     resp = client.chat.completions.create(
                         model=MODEL,
                         messages=[{"role": "user", "content": prompt}],
-                        max_tokens=450,
+                        max_tokens=580,
                     )
                     st.session_state.ai_result = resp.choices[0].message.content
                     st.session_state.ai_topic = topic
