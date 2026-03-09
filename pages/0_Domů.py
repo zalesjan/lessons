@@ -398,7 +398,7 @@ with right:
         if st.button(tr("logout"), key="logout_top"):
             logout()
     else:
-        if st.button({tr('login')}, key="login_top"):
+        if st.button(tr('login'), key="login_top"):
             st.session_state.show_auth = True
 
 st.markdown('</div>', unsafe_allow_html=True)
