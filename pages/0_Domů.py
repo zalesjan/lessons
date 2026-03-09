@@ -324,91 +324,178 @@ lang = st.session_state.lang
 tr = LanguageManager.tr
 
 # ==================================================
+# LOGOUT FN
+# ==================================================
+
+def logout():
+    try:
+        # 1️⃣ Properly sign out from Supabase
+        if st.session_state.get("supabase"):
+            st.session_state.supabase.auth.sign_out()
+    except Exception:
+        pass
+
+    # 2️⃣ Clear session state
+    for key in ["user", "session", "supabase"]:
+        if key in st.session_state:
+            del st.session_state[key]
+
+    # 3️⃣ Clear cookie safely
+    if cookies is not None:
+        cookies["didact_supabase_session"] = ""
+        cookies.save()
+
+    # 4️⃣ Clear URL params
+    st.query_params.clear()
+
+    st.rerun()
+# ==================================================
+# STICKY TOP BAR
+# ==================================================
+
+st.markdown("""
+<style>
+/* Remove default padding at the top */
+.block-container {
+    padding-top: 4rem !important;
+}
+
+/* Fixed top navigation bar */
+.topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+
+    background-color: white;
+    padding: 0.8rem 1.5rem;
+    border-bottom: 1px solid #eaeaea;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Optional shadow for better separation */
+.topbar {
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+</style>
+""", unsafe_allow_html=True)
+
+user = st.session_state.get("user")
+
+st.markdown('<div class="topbar">', unsafe_allow_html=True)
+
+left, right = st.columns([6, 2])
+
+with left:
+    st.markdown("### 📘 Didact-io")
+
+with right:
+    if st.session_state.user:
+        if st.button(tr("logout"), key="logout_top"):
+            logout()
+    else:
+        if st.button({tr('login')}, key="login_top"):
+            st.session_state.show_auth = True
+
+st.markdown('</div>', unsafe_allow_html=True)
+# ==================================================
 # AUTH UI (LOGIN / SIGNUP)
 # ==================================================
 force_login = st.session_state.pop("force_login", False)
 
-if not st.session_state.user:
-    with st.sidebar.expander(f"🔐 {tr("login")} / {tr("signup")}",
+if force_login:
+    st.session_state.show_auth = True
 
-        expanded=force_login
-    ):
-        
-        #st.info(tr("promotion_mode"))
+# ==================================================
+# AUTH PANEL (TOP BAR VERSION)
+# ==================================================
 
-        mode = st.radio(
-            tr("select_to"),
-            [tr("login"), tr("signup")],
-            horizontal=True,
-        )
+if not st.session_state.user and st.session_state.get("show_auth"):
 
-        email = st.text_input(tr("email"))
-        pw = st.text_input(tr("password"), type="password")
+    st.markdown("---")
+    st.markdown(f"## 🔐 {tr('login')} / {tr('signup')}")
 
-        if mode == tr("signup"):
-            if st.button(tr("create_account")):
-                try:
-                    res = ensure_supabase_client().auth.sign_up(
-                        {"email": email, "password": pw}
+    mode = st.radio(
+        tr("select_to"),
+        [tr("login"), tr("signup")],
+        horizontal=True, key="auth_mode"
+    )
+
+    email = st.text_input(tr("email"))
+    pw = st.text_input(tr("password"), type="password")
+
+    col1, col2 = st.columns([1,1])
+    # -------------------
+    # SIGNUP
+    # -------------------
+    if mode == tr("signup"):
+        if col1.button(tr("create_account"), key="signup_btn"):
+            try:
+                res = ensure_supabase_client().auth.sign_up(
+                    {"email": email, "password": pw}
+                )
+                if res.user:
+                    st.success(tr("check_email_for_confirmation"))
+            except Exception as e:
+                st.error(str(e))
+    else:
+        if col1.button(tr("login"), key="login_btn"):
+            try:
+                client = create_auth_client()
+
+                res = client.auth.sign_in_with_password({
+                    "email": email,
+                    "password": pw
+                })
+
+                if res.user and res.session:
+                    # 🔐 bind session to client (THIS WAS MISSING)
+                    client.auth.set_session(
+                        res.session.access_token,
+                        res.session.refresh_token,
                     )
-                    if res.user:
-                        st.success(tr("check_email_for_confirmation"))
-                except Exception as e:
-                    st.error(str(e))
-        else:
-            if st.button(tr("login"), key="login_btn"):
-                try:
-                    client = create_auth_client()
 
-                    res = client.auth.sign_in_with_password({
-                        "email": email,
-                        "password": pw
-                    })
+                    st.session_state.user = {
+                        "id": res.user.id,
+                        "email": res.user.email,
+                    }                        
+                    st.session_state.session = res.session
+                    st.session_state.supabase = client
 
-                    if res.user and res.session:
-                        # 🔐 bind session to client (THIS WAS MISSING)
-                        client.auth.set_session(
-                            res.session.access_token,
-                            res.session.refresh_token,
-                        )
+                    st.session_state.last_refresh = time.time()
 
-                        st.session_state.user = {
-                            "id": res.user.id,
-                            "email": res.user.email,
-                        }                        
-                        st.session_state.session = res.session
-                        st.session_state.supabase = client
-
-                        st.session_state.last_refresh = time.time()
-
-                        if cookies is not None:
-                            cookies["didact_supabase_session"] = json.dumps({
-                                "access_token": res.session.access_token,
-                                "refresh_token": res.session.refresh_token,
-                            })
-                            st.success("About to save cookies")
-                            cookies.save()
-                            
+                    if cookies is not None:
+                        cookies["didact_supabase_session"] = json.dumps({
+                            "access_token": res.session.access_token,
+                            "refresh_token": res.session.refresh_token,
+                        })
+                        st.success("About to save cookies")
+                        cookies.save()
                         
-                        # 🔁 post-login redirect
-                        next_page = st.query_params.get("next")
-                        next_page = next_page[0] if isinstance(next_page, list) else next_page
+                    
+                    # 🔁 post-login redirect
+                    next_page = st.query_params.get("next")
+                    next_page = next_page[0] if isinstance(next_page, list) else next_page
 
-                        # 🔁 SAFE post-login redirect (preserve anon_id + others)
-                        params = dict(st.query_params)
+                    # 🔁 SAFE post-login redirect (preserve anon_id + others)
+                    params = dict(st.query_params)
 
-                        # keep language explicit if you want
-                        params["lang"] = st.session_state.lang
+                    # keep language explicit if you want
+                    params["lang"] = st.session_state.lang
 
-                        st.query_params.update(params)
+                    st.query_params.update(params)
 
-                        if next_page == "billing":
-                            st.switch_page("pages/9_💳_Billing.py")
-                        else:
-                            st.rerun()
+                    if next_page == "billing":
+                        st.switch_page("pages/9_💳_Billing.py")
+                    else:
+                        st.rerun()
 
-                except Exception as e:
-                    st.error(str(e))
+            except Exception as e:
+               st.error(str(e))
 
 # ==================================================
 # LANGUAGE SELECTOR (WIDGET OWNS STATE)
@@ -630,8 +717,6 @@ if st.session_state.user:
         cookies.save()
         st.query_params.clear()
         st.rerun()
-
-    st.sidebar.button(tr("logout"), on_click=logout)
 
 # ==================================================
 # UI Header

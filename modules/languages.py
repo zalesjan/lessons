@@ -334,10 +334,10 @@ Brzy budete moci stavět celé lekce a kombinovat předpřipravené bloky.
 ,
         # Main screen
 
-        "adapt_with_ai_login_title1": "Najdi si super didaktickou metodu z nabídky", 
-        "adapt_with_ai_login_title": "Chceš-li, adaptuj ji na své téma pomocí AI!",
+        "adapt_with_ai_login_title1": "Najdi si super metodu níže", 
+        "adapt_with_ai_login_title": "Adaptuj ji na své téma s AI!",
         "log_to_use": "✨ Uživatel nepřihlášen, jsi v režimu host. Přihlaš se a získej přístup k více metodám a AI adaptacím.",
-        "title": "Didact-io = Didaktické metody ihned",
+        "title": "Didaktické metody ihned",
         "subtitle": "Každá varianta staví na jiné hlavní metodě a obsahuje 1–2 úvodní a 1–2 závěrečné aktivity.",
         "before": "Toto můžeš zařadit před:",
         "main_method": "Doporučený postup",
