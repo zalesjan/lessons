@@ -328,14 +328,27 @@ tr = LanguageManager.tr
 # ==================================================
 
 def logout():
-    st.session_state.user = None
-    st.session_state.session = None
-    st.session_state.supabase = get_guest_client()
-    cookies.pop("didact_supabase_session", None)
-    cookies.save()
-    st.query_params.clear()
-    st.rerun()
+    try:
+        # 1️⃣ Properly sign out from Supabase
+        if st.session_state.get("supabase"):
+            st.session_state.supabase.auth.sign_out()
+    except Exception:
+        pass
 
+    # 2️⃣ Clear session state
+    for key in ["user", "session", "supabase"]:
+        if key in st.session_state:
+            del st.session_state[key]
+
+    # 3️⃣ Clear cookie safely
+    if cookies is not None:
+        cookies["didact_supabase_session"] = ""
+        cookies.save()
+
+    # 4️⃣ Clear URL params
+    st.query_params.clear()
+
+    st.rerun()
 # ==================================================
 # STICKY TOP BAR
 # ==================================================
@@ -385,7 +398,7 @@ with right:
         if st.button(tr("logout"), key="logout_top"):
             logout()
     else:
-        if st.button("Login", key="login_top"):
+        if st.button({tr('login')}, key="login_top"):
             st.session_state.show_auth = True
 
 st.markdown('</div>', unsafe_allow_html=True)
