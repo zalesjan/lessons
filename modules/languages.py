@@ -139,11 +139,10 @@ Soon you'll be able to build full lessons and combine reusable blocks.
     ,
         
         # Main screen
-        "adapt_with_ai_login_title1": "Find a Cool Teaching Method First", 
-        "adapt_with_ai_login_title": "If You Like, Adapt it to Your Topic with AI!",
+        "adapt_with_ai_login_title1": "Find a Cool Method First", 
+        "adapt_with_ai_login_title": "Incorporate Your Topic with AI!",
         "log_to_use": "Log in to use AI or explore more teaching methods. Use Login button in the left pane",
-        "title": "Didact-io = Great Teaching Methods in a few seconds",
-        "title": "Didact.io = great teaching methods",
+        "title": "Great Teaching Methods",
         "subtitle": "Each variant centers a different method and includes 1–2 lead-in and 1–2 consolidation steps.",
         "before": "**People tried this method before:**",
         "main_method": "Suggested steps",
@@ -199,24 +198,28 @@ Soon you'll be able to build full lessons and combine reusable blocks.
    
     "cs": {
         # Billing page
-"billing_title": "Upgraduj na Didact.io Pro",
-"billing_intro": "Odemkni plný přístup k více metodám a k většímu množství adaptací na Tvoje dané téma",
-"billing_no_plans": "No subscription plans are available at the moment.",
-"billing_choose_plan": "Vyber si z možností předplatného",
-"billing_recommended": "Recommended",
-"billing_select_plan": "Vyber {label} plán",
-"billing_select_prompt": "Vyber daný typ předplatného než přejdeš k platbě.",
-"billing_ai_limit": "{ai_generations} adaptací na téma za den",
-"billing_ai_unlimited": "Neomezený počet adaptací pomocí AI",
+    "billing_title": "Upgraduj na Didact.io Pro",
+    "billing_intro": "Odemkni plný přístup k více metodám a k většímu množství adaptací na Tvoje dané téma",
+    "billing_no_plans": "No subscription plans are available at the moment.",
+    "billing_choose_plan": "Vyber si z možností předplatného",
+    "billing_recommended": "Recommended",
+    "billing_select_plan": "Vyber {label} plán",
+    "billing_select_prompt": "Vyber daný typ předplatného než přejdeš k platbě.",
+    "billing_ai_limit": "{ai_generations} adaptací na téma za den",
+    "billing_ai_unlimited": "Neomezený počet adaptací pomocí AI",
     "billing_login_required_title": "Vyžadováno přihlášení",
     "billing_login_required_text": "Pro správu předplatného se prosím přihlaste nebo si vytvořte účet.",
     "billing_login_cta": "Přihlásit se nebo vytvořit účet",
 
     "billing_feature_price": "Cena",
+    "billing_feature_ai_daily": "AI adaptací denně",
+    "billing_feature_ai_weekly":  "AI adaptací týdně",
+    "billing_feature_ai_monthly": "AI adaptací měsíčně",
+    "billing_feature_methods_weekly": "Týdně uvidíš metod:",
+    "billing_feature_methods_total": "Celkem uvidíš metod:",
+
     "billing_feature_ai_limit": "Generování lekcí pomocí AI",
-
     "billing_current_plan": "Aktuální tarif",
-
     "billing_conditions_title": "Podmínky předplatného",
     "billing_conditions_text": (
         "- Zrušení kdykoliv v platebním portálu\n"
