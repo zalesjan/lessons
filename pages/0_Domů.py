@@ -349,6 +349,21 @@ def logout():
     st.query_params.clear()
 
     st.rerun()
+
+# ==================================================
+# HANDLE SUPABASE AUTH REDIRECTS
+# ==================================================
+
+params = st.query_params
+
+auth_type = params.get("type")
+
+if auth_type == "signup":
+    st.success("✅ Your email has been confirmed. You can now sign in.")
+    
+    # clear params so the message does not appear again on refresh
+    st.query_params.clear()
+    
 # ==================================================
 # STICKY TOP BAR
 # ==================================================
@@ -402,6 +417,7 @@ with right:
             st.session_state.show_auth = True
 
 st.markdown('</div>', unsafe_allow_html=True)
+
 # ==================================================
 # AUTH UI (LOGIN / SIGNUP)
 # ==================================================
