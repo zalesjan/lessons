@@ -298,8 +298,8 @@ if "session" not in st.session_state:
 #
 #
 # MAYBE CAN BE REMOVED
-action = st.query_params.get("action")
-action = action[0] if isinstance(action, list) else action
+#action = st.query_params.get("action")
+#action = action[0] if isinstance(action, list) else action
 
 # ==================================================
 # LANGUAGE MANAGER — Initialize from URL / Profile / Session
@@ -505,7 +505,6 @@ LanguageManager.sidebar_selector()
 # ==================================================
 # PROFILES (READ cached, WRITE uncached ✅)
 # ==================================================
-@st.cache_data(ttl=900)
 def load_profile(user_id):
     client = require_user_client()
     res = (
@@ -516,49 +515,7 @@ def load_profile(user_id):
         .maybe_single()
         .execute()
     )
-    return res.data if res.data else None
-
-def load_profile_uncached(user_id):
-    client = require_user_client()
-
-    res = (
-        client
-        .table("profiles")
-        .select("*")
-        .eq("user_id", user_id)
-        .maybe_single()
-        .execute()
-    )
     return res.data
-
-def ensure_profile(user_id):
-    assert_not_cached_write("ensure_profile")
-
-    client = require_user_client()
-
-    profile = load_profile(user_id)
-    if profile:
-        return profile
-
-    st.write("DEBUG AUTH CHECK")
-    st.json({
-        "auth_uid": st.session_state.session.user.id if st.session_state.get("session") else None,
-        "profile_user_id": user_id,
-        "equal?": st.session_state.session.user.id == user_id
-    })
-
-    client.table("profiles").insert({
-        "user_id": user_id,
-        "preferred_language": st.session_state.lang,
-        "plan": "free",
-    }).execute()
-    load_profile.clear()
-
-    profile = load_profile(user_id)
-    if not profile:
-        raise RuntimeError(f"Profile creation failed for user {user_id}")
-
-    return profile
 
 # ==================================================
 # GUEST SESSIONS (READ cached, WRITE uncached ✅)
@@ -592,30 +549,19 @@ def ensure_guest_session(anon_id):
 # LOGGED-IN AREA
 # ==================================================
 if st.session_state.user:
+    
     user_id = st.session_state.user["id"]
 
     try:
-        profile = ensure_profile(user_id)
-        if not profile:
-            time.sleep(2)
-            profile = ensure_profile(user_id)
+        profile = load_profile(user_id)
+
         tier = profile["plan"]
         guest = None
     except Exception as e:
         st.error(f"Profile error: {e}")
         st.stop()
 
-    
-
-    #except Exception as e:
-    #    if not st.session_state.get("user"):
-    #        # only fallback to guest if user really missing
-    #        profile = None
-    #        guest = ensure_guest_session(anon_id)
-    #        tier = "guest"
-    #        st.warning("Session expired. Switched to guest mode.")
 else:
-    #st.warning("333.")
     guest = ensure_guest_session(anon_id)
     profile = "guest"
     tier = "guest"
@@ -635,9 +581,6 @@ if st.session_state.user and profile:
         ).eq(
             "user_id", st.session_state.user["id"]
         ).execute()
-
-        # 🔥 bust cached profile so next reads are fresh
-        load_profile.clear()
 
 # ==================================================
 # ENTITLEMENT & ROTATION
