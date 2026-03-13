@@ -295,11 +295,6 @@ if "user" not in st.session_state:
 
 if "session" not in st.session_state:
     st.session_state.session = None
-#
-#
-# MAYBE CAN BE REMOVED
-#action = st.query_params.get("action")
-#action = action[0] if isinstance(action, list) else action
 
 # ==================================================
 # LANGUAGE MANAGER — Initialize from URL / Profile / Session
@@ -354,16 +349,14 @@ def logout():
 # HANDLE SUPABASE AUTH REDIRECTS
 # ==================================================
 
-params = st.query_params
-
-auth_type = params.get("type")
-
+auth_type = st.query_params.get("type")
+st.write(auth_type)
 if auth_type == "signup":
-    st.success("✅ Your email has been confirmed. You can now sign in.")
+    st.success(f"{tr('email_confirmed')} ✅ Your email has been confirmed. You can now sign in.")
     
     # clear params so the message does not appear again on refresh
     st.query_params.clear()
-    
+
 # ==================================================
 # STICKY TOP BAR
 # ==================================================

@@ -3,6 +3,7 @@ import requests
 from modules.languages import translations
 from modules.supabase_client import get_guest_client
 from modules.supabase_client import get_user_client
+import uuid
 
 # ==================================================
 # STATE + CONFIG
@@ -84,12 +85,34 @@ if st.session_state.user:
 # --------------------------------------------------
 # Load plans from Supabase
 # --------------------------------------------------
+def get_or_create_anon_id():
+    """Ensure a persistent anon_id stored in URL and session_state."""
+    if "anon_id" in st.session_state:
+        return st.session_state.anon_id
+    
+    anon_id = st.query_params.get("anon_id")
+    if isinstance(anon_id, list):
+        anon_id = anon_id[0]
+
+    # If missing, generate new anon_id and update URL
+    if not anon_id:
+        anon_id = str(uuid.uuid4())
+        st.query_params["anon_id"] = anon_id
+        st.query_params.update({"anon_id": anon_id})
+
+    # Sync to session_state
+    st.session_state.anon_id = anon_id
+    return anon_id
+
+anon_id = get_or_create_anon_id()
+
 anon_supabase = get_guest_client()
 
 plans = (
     anon_supabase
     .table("plans")
     .select("*")
+    .order("plan_order", desc=False)
     .execute()
     .data
 )
@@ -124,21 +147,21 @@ FEATURE_ROWS = [
     # ── AI limits ──────────────────────────────────
     {
         "label": tr("billing_feature_ai_daily"),
-        "icon": "🤖",
+        "icon": "",
         "render": lambda plan: render_limit(
             plan.get("daily_lesson_quota")
         ),
     },
     {
         "label": tr("billing_feature_ai_weekly"),
-        "icon": "🤖",
+        "icon": "",
         "render": lambda plan: render_limit(
             plan.get("weekly_lesson_quota")
         ),
     },
     {
         "label": tr("billing_feature_ai_monthly"),
-        "icon": "🤖",
+        "icon": "",
         "render": lambda plan: render_limit(
             plan.get("monthly_lesson_quota")
         ),
@@ -147,14 +170,14 @@ FEATURE_ROWS = [
     # ── Method limits ──────────────────────────────
     {
         "label": tr("billing_feature_methods_weekly"),
-        "icon": "📚",
+        "icon": "",
         "render": lambda plan: render_limit(
             plan.get("weekly_method_quota")
         ),
     },
     {
         "label": tr("billing_feature_methods_total"),
-        "icon": "📚",
+        "icon": "",
         "render": lambda plan: render_limit(
             plan.get("total_method_quota")
         ),
@@ -274,6 +297,7 @@ st.markdown(tr("billing_conditions_text"))
 # --------------------------------------------------
 if st.session_state.user:
     if st.button(tr("billing_checkout"), use_container_width=True):
+        st.write(selected_interval)
         with st.spinner(tr("billing_redirecting")):
             res = requests.post(
                 f"{st.secrets['supabase']['functions_url']}/create-checkout",
@@ -288,12 +312,8 @@ if st.session_state.user:
                 timeout=15,
             )
 
-        #if res.status_code != 200:
-        #    st.error(tr("billing_checkout_failed"))
-        #    st.stop()
-
         if res.status_code != 200:
-            st.error("Failed to create checkout session.")
+            st.error(tr("billing_checkout_failed"))
             st.write("Status code:", res.status_code)
             st.write("Response text:", res.text)
             st.stop()
