@@ -197,7 +197,7 @@ Soon you'll be able to build full lessons and combine reusable blocks.
     },
    
     "cs": {
-        # Billing page
+    # Billing page
     "billing_title": "Upgraduj na Didact.io Pro",
     "billing_intro": "Odemkni plný přístup k více metodám a k většímu množství adaptací na Tvoje dané téma",
     "billing_no_plans": "No subscription plans are available at the moment.",
@@ -227,18 +227,18 @@ Soon you'll be able to build full lessons and combine reusable blocks.
         "- Neuchováváme žádné platební údaje\n"
         "- DPH a faktury zpracovány automaticky"
     ),
-"billing_checkout": "Pokračuj k platbě",
-"billing_redirecting": "Redirecting to secure payment...",
-"billing_checkout_failed": "Unable to start checkout session.",
-"billing_proceed_payment": "Proceed to secure payment",
+    "billing_checkout": "Pokračuj k platbě",
+    "billing_redirecting": "Přesměrování na bezpečnou platební bránu...",
+    "billing_checkout_failed": "Nepodařilo se nám zahájit platební proces.",
+    "billing_proceed_payment": "Přejít na platební bránu",
 
-        "billing_choose_plan": "Vyber si tarif",
-        "billing_select_plan": "Vybrat tarif",
-        "billing_select_prompt": "Vyber tarif, který ti nejlépe vyhovuje:",
-        
-        # about text
-        "about_short_btn": "Co je Didact.io? (krátce)",
-        "about_full_btn": "Co je Didact.io? (dlouze)",
+    "billing_choose_plan": "Vyber si tarif",
+    "billing_select_plan": "Vybrat tarif",
+    "billing_select_prompt": "Vyber tarif, který ti nejlépe vyhovuje:",
+    
+    # about text
+    "about_short_btn": "Co je Didact.io? (krátce)",
+    "about_full_btn": "Co je Didact.io? (dlouze)",
         "about_short": """
 # 🧩 O aplikaci Didact-io
 
@@ -392,25 +392,22 @@ Brzy budete moci stavět celé lekce a kombinovat předpřipravené bloky.
         "generating_lesson": "Generuji lekci..."
     },
 "fr": {
-         # Billing page
-"billing_title": "Passez à Didact.io Pro",
-"billing_intro": "Débloquez un accès complet aux méthodes d’enseignement et des limites IA plus élevées.",
-"billing_no_plans": "Aucune formule n’est disponible pour le moment.",
-"billing_choose_plan": "Choisissez votre formule d’abonnement",
-"billing_recommended": "Recommandé",
-"billing_select_plan": "Choisir la formule {label}",
-"billing_select_prompt": "Sélectionnez une formule ci-dessus pour continuer vers le paiement.",
-"billing_ai_limit": "{ai_generations} leçons générées par IA par jour",
-"billing_ai_unlimited": "Génération IA illimitée",
-    "billing_login_required_title": "Connexion requise",
+    # Billing page
+    "billing_title": "Passez à Didact.io Pro",
+    "billing_intro": "Débloquez un accès complet aux méthodes d’enseignement et des limites IA plus élevées.",
+    "billing_no_plans": "Aucune formule n’est disponible pour le moment.",
+    "billing_choose_plan": "Choisissez votre formule d’abonnement",
+    "billing_recommended": "Recommandé",
+    "billing_select_plan": "Choisir la formule {label}",
+    "billing_select_prompt": "Sélectionnez une formule ci-dessus pour continuer vers le paiement.",
+    "billing_ai_limit": "{ai_generations} leçons générées par IA par jour",
+    "billing_ai_unlimited": "Génération IA illimitée",
+        "billing_login_required_title": "Connexion requise",
     "billing_login_required_text": "Veuillez vous connecter ou créer un compte pour gérer votre abonnement.",
     "billing_login_cta": "Se connecter ou créer un compte",
-
     "billing_feature_price": "Prix",
     "billing_feature_ai_limit": "Génération de leçons par IA",
-
     "billing_current_plan": "Abonnement actuel",
-
     "billing_conditions_title": "Conditions d’abonnement",
     "billing_conditions_text": (
         "- Résiliation possible à tout moment\n"
@@ -418,14 +415,14 @@ Brzy budete moci stavět celé lekce a kombinovat předpřipravené bloky.
         "- Nous ne stockons aucune donnée de paiement\n"
         "- TVA et factures gérées automatiquement"
     ),
-"billing_checkout": "Procéder au paiement",
-"billing_redirecting": "Redirection vers un paiement sécurisé…",
-"billing_checkout_failed": "Impossible de créer une session de paiement.",
-"billing_proceed_payment": "Procéder au paiement sécurisé",
+    "billing_checkout": "Procéder au paiement",
+    "billing_redirecting": "Redirection vers un paiement sécurisé…",
+    "billing_checkout_failed": "Impossible de créer une session de paiement.",
+    "billing_proceed_payment": "Procéder au paiement sécurisé",
         
-        # about text
-        "about_short_btn": "About Didact.io - short",
-        "about_full_btn": "About Didact.io - full version",
+    # about text
+    "about_short_btn": "About Didact.io - short",
+    "about_full_btn": "About Didact.io - full version",
         "about_short": """
 # 🧩 Didact-io
 

@@ -187,7 +187,6 @@ FEATURE_ROWS = [
 # ==================================================
 # PLAN COMPARISON UI
 # ==================================================
-selected_interval = st.session_state.selected_interval
 
 st.subheader(tr("billing_choose_plan"))
 
@@ -280,7 +279,7 @@ else:
 # --------------------------------------------------
 # Require selection
 # --------------------------------------------------
-if not selected_interval and st.session_state.user:
+if not st.session_state.selected_interval and st.session_state.user:
     st.info(tr("billing_select_prompt"))
     st.stop()
 
@@ -297,12 +296,11 @@ st.markdown(tr("billing_conditions_text"))
 # --------------------------------------------------
 if st.session_state.user:
     if st.button(tr("billing_checkout"), use_container_width=True):
-        st.write(selected_interval)
         with st.spinner(tr("billing_redirecting")):
             res = requests.post(
                 f"{st.secrets['supabase']['functions_url']}/create-checkout",
                 json={
-                    "interval": selected_interval,
+                    "interval": st.session_state.selected_interval,
                     "user_id": st.session_state.user["id"],
                     "email": st.session_state.user["email"]
                 },

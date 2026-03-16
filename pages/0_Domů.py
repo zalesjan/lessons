@@ -349,9 +349,10 @@ def logout():
 # HANDLE SUPABASE AUTH REDIRECTS
 # ==================================================
 
-auth_type = st.query_params.get("type")
-st.write(auth_type)
-if auth_type == "signup":
+access_token = st.query_params.get("access_token")
+refresh_token = st.query_params.get("refresh_token")
+st.write(st.query_params)
+if access_token and refresh_token:
     st.success(f"{tr('email_confirmed')} ✅ Your email has been confirmed. You can now sign in.")
     
     # clear params so the message does not appear again on refresh
@@ -697,7 +698,9 @@ plan = (
         .execute()
         .data
     )
-number_of_methods_to_show = plan["weekly_method_quota"]
+if plan["weekly_method_quota"] == None: 
+    number_of_methods_to_show = 200
+else: number_of_methods_to_show = plan["weekly_method_quota"]
 
 if not st.session_state.user:
     msg3 = tr("guest_mode")
